@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Gecko Inventory Scanner V8</title>
+<title>Gecko Inventory Scanner V9 Precision</title>
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
@@ -662,7 +662,7 @@ function scorePattern(value, kind){
     if(/\d{6,}/.test(value)) s += 5;
     return Math.min(98, s);
   }
-  if(kind==="id") return /^\d{4}-\d{6}-\d{3}$/.test(value) ? 98 : 72;
+  if(kind==="id") return /^\d{4}-\d{6}(?:-\d{3})?$/.test(value) ? 98 : 72;
   if(kind==="part") return /^\d{4}-\d{5,7}$/.test(value) ? 96 : 74;
   if(kind==="model") return /[A-Z]/.test(value) && /[-\.]/.test(value) ? 90 : 75;
   return 75;
@@ -939,11 +939,19 @@ function extractCandidates(text, barcode){
     }
   }
 
-  const idm = full.match(/\b\d{4}-\d{6}-\d{3}\b/);
+  // Gecko labels use more than one ID format:
+  // 0610-221126-751 (3 groups) and 0607-005036 (2 groups).
+  const idm = full.match(/(?:ID\s*(?:NUMBER|#|NO\.?)\s*:?\s*)?(\d{4}-\d{6}(?:-\d{3})?)/i);
   const partm = full.match(/PART\s*#?\s*:?\s*([0-9]{4}-[0-9]{5,7})/i);
   const datem = full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
   const ratingm = full.match(/\b\d{3}V[- ]?\d\.?\d?\s*KW\b/i);
-  const modelm = full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
+
+  // MODEL may be IN.K1000 / IN.YE / IN.XE etc.
+  const modelm = full.match(/MODEL\s*:?\s*([A-Z]{1,4}\.?[A-Z0-9.\-]+)/i);
+
+  // Explicit SERIAL NO. / SERIAL NUMBER / S/N handling.
+  const explicitSerial = full.match(/(?:SERIAL\s*(?:NO\.?|NUMBER)?|S\/N)\s*:?\s*([0-9]{8,10}[A-Z])/i);
+  if(explicitSerial) serial = normalizeCode(explicitSerial[1]);
 
   if(!serial){
     const candidates=(full.toUpperCase().match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g)||[])
@@ -955,18 +963,24 @@ function extractCandidates(text, barcode){
   let barcodeKind = "";
   if(barcode){
     const b = normalizeCode(barcode);
-    if(/^\d{4}-\d{6}-\d{3}$/.test(b)) barcodeKind = "id";
+    // Gecko ID can be ####-###### or ####-######-###.
+    // If OCR sees "ID NUMBER" near the same value, force ID rather than Part #.
+    const idLabelPresent = /ID\s*(?:NUMBER|#|NO\.?)/i.test(full);
+    const partLabelPresent = /PART\s*#/i.test(full);
+
+    if(/^\d{4}-\d{6}(?:-\d{3})?$/.test(b) && idLabelPresent && !partLabelPresent) barcodeKind = "id";
+    else if(/^\d{4}-\d{6}-\d{3}$/.test(b)) barcodeKind = "id";
     else if(/^[A-Z0-9]{8,14}$/.test(b)) barcodeKind = "serial";
-    else if(/^\d{4}-\d{5,7}$/.test(b)) barcodeKind = "part";
+    else if(/^\d{4}-\d{5,7}$/.test(b)) barcodeKind = partLabelPresent ? "part" : "id";
     if(barcodeKind==="serial"){ serial = b; serialSource = "Barcode"; }
   }
 
   return {
     type: classifyEquipment(full),
     serial: normalizeCode(serial),
-    id: idm ? idm[0] : (barcodeKind==="id" ? normalizeCode(barcode) : ""),
+    id: idm ? normalizeCode(idm[1] || idm[0]) : (barcodeKind==="id" ? normalizeCode(barcode) : ""),
     part: partm ? partm[1] : (barcodeKind==="part" ? normalizeCode(barcode) : ""),
-    model: modelm ? normalizeCode(modelm[1]) : "",
+    model: modelm ? normalizeCode(modelm[1]).replace(/^OID$/,"") : "",
     rating: ratingm ? clean(ratingm[0].toUpperCase()) : "",
     date: datem ? datem[0].replaceAll("/", "-") : "",
     barcodeKind,
