@@ -1,66 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Gecko Scanner</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gecko Inventory Scanner</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
-  :root{
-    --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#f8fafc;
-    --line:#243041; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#0b1220,#111827);color:var(--text)}
-  .wrap{max-width:760px;margin:0 auto;padding:18px}
-  h1{font-size:26px;margin:4px 0 2px}
-  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
-  .card{background:rgba(17,24,39,.96);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 10px 30px rgba(0,0,0,.22)}
-  label{display:block;color:#cbd5e1;font-size:13px;margin:10px 0 6px}
-  input,select,button{width:100%;border-radius:12px;border:1px solid #334155;padding:13px;font-size:16px}
-  input,select{background:#0b1220;color:white}
-  button{background:var(--accent);color:#062033;font-weight:800;border:none;cursor:pointer}
-  button.secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
-  button.good{background:var(--ok);color:#052e16}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-  .status{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
-  .preview{width:100%;max-height:300px;object-fit:contain;border-radius:12px;background:#020617;margin-top:10px;display:none}
-  .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-  .pill{background:#0b1220;border:1px solid #334155;border-radius:999px;padding:8px 11px;color:#cbd5e1;font-size:13px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:10px 8px;border-bottom:1px solid #273449;text-align:left;vertical-align:top}
-  th{color:#93c5fd}
-  .small{font-size:12px;color:var(--muted)}
-  .danger{background:#7f1d1d;color:#fecaca}
-  @media(max-width:620px){
-    .grid,.actions{grid-template-columns:1fr}
-    table{font-size:12px}
-    th:nth-child(4),td:nth-child(4){display:none}
-  }
+:root{
+  --bg:#0b1220; --card:#111827; --card2:#0f172a; --line:#263244;
+  --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --good:#22c55e;
+  --warn:#f59e0b; --bad:#ef4444;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:linear-gradient(180deg,#07111f,#111827 40%,#0b1220);
+  color:var(--text);
+}
+.wrap{max-width:840px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:14px}
+.card{
+  background:rgba(17,24,39,.96); border:1px solid var(--line);
+  border-radius:18px; padding:16px; margin-bottom:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.22)
+}
+.hero{border-color:#28516a}
+label{display:block;color:#cbd5e1;font-size:13px;margin:10px 0 6px}
+input,select,textarea,button{
+  width:100%; border-radius:12px; border:1px solid #334155; padding:13px; font-size:16px
+}
+input,select,textarea{background:#09111f;color:white}
+textarea{min-height:72px;resize:vertical}
+button{background:var(--accent);color:#062033;font-weight:800;border:none;cursor:pointer}
+button.secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+button.good{background:var(--good);color:#052e16}
+button.warn{background:var(--warn);color:#2a1700}
+button.bad{background:#7f1d1d;color:#fee2e2}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.preview{
+  width:100%; max-height:330px; object-fit:contain; border-radius:12px;
+  background:#020617; margin-top:10px; display:none
+}
+.status{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
+.detect{
+  background:#07111f;border:1px solid #334155;border-radius:14px;padding:12px;margin-top:12px
+}
+.detect strong{color:#93c5fd}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.pill{background:#0b1220;border:1px solid #334155;border-radius:999px;padding:7px 10px;font-size:12px;color:#cbd5e1}
+.pill.good{border-color:#166534;color:#bbf7d0}
+.pill.warn{border-color:#92400e;color:#fde68a}
+.pill.bad{border-color:#991b1b;color:#fecaca}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 8px;border-bottom:1px solid #273449;text-align:left;vertical-align:top}
+th{color:#93c5fd}
+.small{font-size:12px;color:var(--muted)}
+.confidence{font-size:12px;margin-top:5px;color:#cbd5e1}
+.hidden{display:none}
+@media(max-width:680px){
+  .grid2,.grid3,.actions{grid-template-columns:1fr}
+  table{font-size:12px}
+  th:nth-child(5),td:nth-child(5){display:none}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Gecko Scanner</h1>
-  <p class="sub">Take a photo → read the label → confirm → save.</p>
+  <h1>Gecko Inventory Scanner</h1>
+  <p class="sub">Photo → barcode + OCR → review → confirm → next item.</p>
 
-  <div class="card">
-    <label>Take or upload photo</label>
+  <div class="card hero">
+    <label>Take a clear photo of the label</label>
     <input id="photo" type="file" accept="image/*" capture="environment">
-    <img id="preview" class="preview" alt="Preview">
+    <img id="preview" class="preview" alt="Label preview">
+
     <div class="actions">
-      <button id="scanBtn">Scan label</button>
-      <button id="clearBtn" class="secondary">Clear form</button>
+      <button id="scanBtn">SCAN GECKO LABEL</button>
+      <button id="resetBtn" class="secondary">NEW ITEM</button>
     </div>
-    <div id="status" class="status"></div>
+
+    <div id="status" class="status">Ready.</div>
+
+    <div id="detectBox" class="detect hidden">
+      <div><strong id="detectedType">Detected: —</strong></div>
+      <div class="pills" id="confidencePills"></div>
+      <div class="small" id="barcodeInfo"></div>
+    </div>
   </div>
 
   <div class="card">
-    <div class="grid">
+    <div class="grid2">
       <div>
         <label>Equipment Type</label>
         <select id="type">
+          <option>Pack Control</option>
           <option>Spa Pack</option>
           <option>Heater</option>
           <option>Pump</option>
@@ -73,52 +110,107 @@
         <label>Brand</label>
         <input id="brand" value="Gecko">
       </div>
+    </div>
+
+    <div class="grid2">
       <div>
         <label>Serial Number</label>
-        <input id="serial" placeholder="e.g. 251742174X">
+        <input id="serial" autocomplete="off" autocapitalize="characters">
+        <div id="serialConf" class="confidence"></div>
       </div>
       <div>
         <label>ID #</label>
-        <input id="idnum" placeholder="e.g. 0610-221126-751">
+        <input id="idnum" autocomplete="off">
+        <div id="idConf" class="confidence"></div>
       </div>
       <div>
         <label>Part #</label>
-        <input id="part" placeholder="e.g. 9920-101535">
+        <input id="part" autocomplete="off">
+        <div id="partConf" class="confidence"></div>
       </div>
       <div>
         <label>Model</label>
-        <input id="model" placeholder="Model">
+        <input id="model" autocomplete="off">
+        <div id="modelConf" class="confidence"></div>
       </div>
       <div>
         <label>Rating</label>
-        <input id="rating" placeholder="e.g. 240V-4.0KW">
+        <input id="rating" autocomplete="off">
       </div>
       <div>
         <label>Date</label>
-        <input id="date" placeholder="YYYY-MM-DD">
+        <input id="date" autocomplete="off" placeholder="YYYY-MM-DD">
       </div>
     </div>
-    <button id="saveBtn" class="good" style="margin-top:14px">Save item</button>
-    <div id="dup" class="status"></div>
+
+    <div class="grid3">
+      <div>
+        <label>Status</label>
+        <select id="itemStatus">
+          <option>Unknown</option>
+          <option>New</option>
+          <option>Used</option>
+          <option>Tested</option>
+          <option>Bad / Defective</option>
+          <option>Warranty Return</option>
+        </select>
+      </div>
+      <div>
+        <label>Location</label>
+        <select id="location">
+          <option></option>
+          <option>Building 1</option>
+          <option>Building 2</option>
+          <option>Service</option>
+          <option>Parts</option>
+          <option>Shelf A</option>
+          <option>Shelf B</option>
+          <option>Shelf C</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label>Source</label>
+        <select id="source">
+          <option>Photo Scan</option>
+          <option>Barcode</option>
+          <option>Manual Check</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Notes</label>
+    <textarea id="notes" placeholder="Optional notes only if needed"></textarea>
+
+    <div class="actions">
+      <button id="saveBtn" class="good">CONFIRM & SAVE</button>
+      <button id="editCheckBtn" class="secondary">CHECK DUPLICATE</button>
+    </div>
+    <div id="saveMsg" class="status"></div>
   </div>
 
   <div class="card">
-    <div class="stats">
+    <div class="pills">
       <span class="pill" id="countAll">Total: 0</span>
+      <span class="pill" id="countControl">Pack Controls: 0</span>
       <span class="pill" id="countSpa">Spa Packs: 0</span>
       <span class="pill" id="countHeat">Heaters: 0</span>
     </div>
+
     <div style="overflow:auto">
       <table>
         <thead>
-          <tr><th>Type</th><th>Serial</th><th>ID / Part</th><th>Model</th><th></th></tr>
+          <tr>
+            <th>Type</th><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th></th>
+          </tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
+
     <div class="actions">
-      <button id="csvBtn" class="secondary">Export CSV</button>
-      <button id="wipeBtn" class="danger">Delete all</button>
+      <button id="csvBtn" class="secondary">EXPORT CSV</button>
+      <button id="wipeBtn" class="bad">DELETE ALL</button>
     </div>
   </div>
 </div>
@@ -126,122 +218,304 @@
 <script>
 const $ = id => document.getElementById(id);
 let imageDataUrl = "";
+let lastBarcode = "";
+let ocrText = "";
 
-function getItems(){ return JSON.parse(localStorage.getItem("geckoInventory") || "[]"); }
-function setItems(items){ localStorage.setItem("geckoInventory", JSON.stringify(items)); render(); }
+function getItems(){ return JSON.parse(localStorage.getItem("geckoInventoryV2") || "[]"); }
+function setItems(items){ localStorage.setItem("geckoInventoryV2", JSON.stringify(items)); render(); }
 
 function clean(s){ return (s||"").replace(/\s+/g," ").trim(); }
+function normalizeCode(s){ return clean(s).toUpperCase().replace(/[^A-Z0-9\-\.]/g,""); }
+function setConf(id, score, label){
+  const el=$(id);
+  if(!score){ el.textContent=""; return; }
+  const pct=Math.max(1,Math.min(99,Math.round(score)));
+  el.textContent=`${label || "Confidence"}: ${pct}%`;
+  el.style.color = pct>=90 ? "#86efac" : pct>=75 ? "#fde68a" : "#fca5a5";
+}
+function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
 
 $("photo").addEventListener("change", e=>{
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
-  r.onload=()=>{ imageDataUrl=r.result; $("preview").src=imageDataUrl; $("preview").style.display="block"; };
+  r.onload=()=>{
+    imageDataUrl=r.result;
+    $("preview").src=imageDataUrl;
+    $("preview").style.display="block";
+    $("status").textContent="Photo ready. Press SCAN GECKO LABEL.";
+  };
   r.readAsDataURL(f);
 });
 
-$("scanBtn").addEventListener("click", async ()=>{
-  if(!imageDataUrl){ $("status").textContent="Please take or upload a photo first."; return; }
-  $("status").textContent="Reading label…";
+async function decodeBarcodeFromImage(imgEl){
+  lastBarcode="";
   try{
-    const result = await Tesseract.recognize(imageDataUrl, 'eng', {
-      logger: m => {
-        if(m.status === "recognizing text") $("status").textContent = `Reading label… ${Math.round((m.progress||0)*100)}%`;
+    if(!window.ZXing) return "";
+    const reader = new ZXing.BrowserMultiFormatReader();
+    const result = await reader.decodeFromImageElement(imgEl);
+    if(result && result.text){
+      lastBarcode = clean(result.text);
+      return lastBarcode;
+    }
+  }catch(e){}
+  return "";
+}
+
+function scorePattern(value, kind){
+  if(!value) return 0;
+  if(kind==="serial"){
+    let s=65;
+    if(/^[A-Z0-9]{8,14}$/.test(value)) s+=20;
+    if(/[A-Z]$/.test(value)) s+=8;
+    if(/\d{6,}/.test(value)) s+=5;
+    return Math.min(98,s);
+  }
+  if(kind==="id"){
+    return /^\d{4}-\d{6}-\d{3}$/.test(value) ? 98 : 72;
+  }
+  if(kind==="part"){
+    return /^\d{4}-\d{6}$/.test(value) || /^\d{4}-\d{5,7}$/.test(value) ? 96 : 74;
+  }
+  if(kind==="model"){
+    return /[A-Z]/.test(value) && /[-\.]/.test(value) ? 90 : 75;
+  }
+  return 75;
+}
+
+function classifyEquipment(full){
+  const t=full.toUpperCase();
+  if(/HEATER|HEAT\.WAV|CURRENT COLLECTOR|4\.0KW|240V/.test(t)) return "Heater";
+  if(/\bIN\.(XE|YE|YT|XM|YT-7|YT-8|YJ)\b|PACK CONTROL|SPA CONTROL|CONTROL PACK/.test(t)) return "Pack Control";
+  if(/SPA PACK/.test(t)) return "Spa Pack";
+  if(/PUMP|HP\b|HORSEPOWER/.test(t)) return "Pump";
+  if(/DISPLAY|TOPSIDE|KEYPAD/.test(t)) return "Display";
+  if(/BOARD|PCB|CIRCUIT/.test(t)) return "Board";
+  return "Pack Control";
+}
+
+function extractCandidates(text, barcode){
+  const lines=text.split(/\n/).map(x=>x.trim()).filter(Boolean);
+  const full=lines.join(" ").replace(/[|]/g,"I");
+
+  let serial="";
+  let serialSource="OCR";
+
+  // Prefer nearby SERIAL / S/N labels
+  for(let i=0;i<lines.length;i++){
+    if(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/i.test(lines[i])){
+      const near=(lines[i]+" "+(lines[i+1]||"")).toUpperCase();
+      const c=near.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g) || [];
+      serial=c.find(v=>!/^20\d{2}$/.test(v)) || "";
+      if(serial) break;
+    }
+  }
+
+  const idm=full.match(/\b\d{4}-\d{6}-\d{3}\b/);
+  const partm=full.match(/PART\s*#?\s*:?\s*([0-9]{4}-[0-9]{5,7})/i);
+  const datem=full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
+  const ratingm=full.match(/\b240V[- ]?4\.?0?\s*KW\b/i);
+  const modelm=full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
+
+  if(!serial){
+    const candidates=(full.toUpperCase().match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g)||[])
+      .filter(x=>!x.includes("0610") && !/^20\d{6}$/.test(x));
+    serial=candidates.find(x=>/[A-Z]$/.test(x)) || candidates[0] || "";
+  }
+
+  // If barcode looks like a serial or Gecko ID, use it as a high confidence source
+  let barcodeKind="";
+  if(barcode){
+    const b=normalizeCode(barcode);
+    if(/^\d{4}-\d{6}-\d{3}$/.test(b)) barcodeKind="id";
+    else if(/^[A-Z0-9]{8,14}$/.test(b)) barcodeKind="serial";
+    else if(/^\d{4}-\d{5,7}$/.test(b)) barcodeKind="part";
+
+    if(barcodeKind==="serial"){ serial=b; serialSource="Barcode"; }
+  }
+
+  return {
+    type: classifyEquipment(full),
+    serial: normalizeCode(serial),
+    id: idm ? idm[0] : (barcodeKind==="id" ? normalizeCode(barcode) : ""),
+    part: partm ? partm[1] : (barcodeKind==="part" ? normalizeCode(barcode) : ""),
+    model: modelm ? normalizeCode(modelm[1]) : "",
+    rating: ratingm ? clean(ratingm[0].toUpperCase()) : "",
+    date: datem ? datem[0].replaceAll("/","-") : "",
+    barcodeKind,
+    serialSource
+  };
+}
+
+$("scanBtn").addEventListener("click", async ()=>{
+  if(!imageDataUrl){
+    $("status").textContent="Take or upload a photo first.";
+    return;
+  }
+
+  $("status").textContent="Step 1/2: checking barcode…";
+  const barcode = await decodeBarcodeFromImage($("preview"));
+
+  $("status").textContent="Step 2/2: reading printed label…";
+  try{
+    const result=await Tesseract.recognize(imageDataUrl,'eng',{
+      logger:m=>{
+        if(m.status==="recognizing text"){
+          $("status").textContent=`Reading printed label… ${Math.round((m.progress||0)*100)}%`;
+        }
       }
     });
-    const t = result.data.text.replace(/[|]/g,"I");
-    parseText(t);
-    $("status").textContent="Scan complete. Please confirm the fields before saving.";
+
+    ocrText=result.data.text || "";
+    const c=extractCandidates(ocrText,barcode);
+
+    $("type").value=c.type;
+    $("serial").value=c.serial;
+    $("idnum").value=c.id;
+    $("part").value=c.part;
+    $("model").value=c.model;
+    $("rating").value=c.rating;
+    $("date").value=c.date;
+    $("source").value = barcode ? "Barcode" : "Photo Scan";
+
+    setConf("serialConf", scorePattern(c.serial,"serial") + (c.serialSource==="Barcode"?1:0), c.serialSource);
+    setConf("idConf", scorePattern(c.id,"id"), c.barcodeKind==="id"?"Barcode":"OCR");
+    setConf("partConf", scorePattern(c.part,"part"), c.barcodeKind==="part"?"Barcode":"OCR");
+    setConf("modelConf", scorePattern(c.model,"model"), "OCR");
+
+    $("detectBox").classList.remove("hidden");
+    $("detectedType").textContent=`Detected: ${c.type}`;
+    $("barcodeInfo").textContent = barcode ? `Barcode read: ${barcode}` : "No barcode decoded; using printed text OCR.";
+    $("confidencePills").innerHTML = `
+      <span class="pill ${c.serial ? "good":"bad"}">Serial ${c.serial ? "found":"missing"}</span>
+      <span class="pill ${c.id || c.part ? "good":"warn"}">ID/Part ${c.id || c.part ? "found":"check"}</span>
+      <span class="pill ${c.model ? "good":"warn"}">Model ${c.model ? "found":"optional"}</span>
+    `;
+
+    const dup=findDuplicate(c.serial,c.id,c.part);
+    if(dup){
+      $("saveMsg").textContent=`⚠ Already registered: ${dup.serial || dup.id || dup.part}`;
+      $("saveMsg").style.color="#fca5a5";
+    }else{
+      $("saveMsg").textContent="";
+    }
+
+    $("status").textContent="Scan complete. Review the highlighted fields and press CONFIRM & SAVE.";
   }catch(e){
-    $("status").textContent="Could not read the image. You can still enter the fields manually.";
+    $("status").textContent="OCR could not read this photo. Try a closer, straighter photo with less glare.";
   }
 });
 
-function parseText(text){
-  const lines = text.split(/\n/).map(x=>x.trim()).filter(Boolean);
-  const full = lines.join(" ");
-
-  let serial = "";
-  for(let i=0;i<lines.length;i++){
-    if(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/i.test(lines[i])){
-      const m=(lines[i]+" "+(lines[i+1]||"")).match(/\b[A-Z0-9]{8,14}\b/);
-      if(m){ serial=m[0]; break; }
-    }
-  }
-  if(!serial){
-    const candidates = full.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{9,12}\b/g) || [];
-    serial = candidates.find(x=>!/^\d{4}-\d/.test(x)) || "";
-  }
-
-  const idm = full.match(/\b\d{4}-\d{6}-\d{3}\b/);
-  const partm = full.match(/PART\s*#?\s*:?\s*([0-9-]{8,})/i);
-  const datem = full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
-  const ratingm = full.match(/\b240V[- ]?4\.?0?\s*KW\b/i);
-  const modelm = full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
-
-  if(serial) $("serial").value=serial;
-  if(idm) $("idnum").value=idm[0];
-  if(partm) $("part").value=partm[1];
-  if(datem) $("date").value=datem[0].replaceAll("/","-");
-  if(ratingm) $("rating").value=clean(ratingm[0]);
-  if(modelm) $("model").value=clean(modelm[1]);
-
-  if(/HEATER|HEAT\.WAV|CURRENT COLLECTOR/i.test(full)) $("type").value="Heater";
-  else if(/SPA|PACK|IN\.YE|IN\.XM/i.test(full)) $("type").value="Spa Pack";
+function findDuplicate(serial,id,part){
+  const items=getItems();
+  return items.find(x =>
+    (serial && x.serial===serial) ||
+    (id && x.id===id) ||
+    (part && x.part===part && x.type===$("type").value)
+  );
 }
 
-function clearForm(){
-  ["serial","idnum","part","model","rating","date"].forEach(id=>$(id).value="");
-  $("type").value="Spa Pack"; $("brand").value="Gecko"; $("dup").textContent="";
-}
-$("clearBtn").onclick=clearForm;
+$("editCheckBtn").onclick=()=>{
+  const dup=findDuplicate(normalizeCode($("serial").value),normalizeCode($("idnum").value),normalizeCode($("part").value));
+  $("saveMsg").textContent = dup ? `⚠ Duplicate found: ${dup.type} — ${dup.serial || dup.id || dup.part}` : "No duplicate found.";
+  $("saveMsg").style.color = dup ? "#fca5a5" : "#86efac";
+};
 
 $("saveBtn").onclick=()=>{
   const item={
-    type:$("type").value, brand:clean($("brand").value), serial:clean($("serial").value).toUpperCase(),
-    id:clean($("idnum").value), part:clean($("part").value), model:clean($("model").value),
-    rating:clean($("rating").value), date:clean($("date").value),
+    type:$("type").value,
+    brand:clean($("brand").value)||"Gecko",
+    serial:normalizeCode($("serial").value),
+    id:normalizeCode($("idnum").value),
+    part:normalizeCode($("part").value),
+    model:normalizeCode($("model").value),
+    rating:clean($("rating").value).toUpperCase(),
+    date:clean($("date").value),
+    status:$("itemStatus").value,
+    location:$("location").value,
+    source:$("source").value,
+    notes:clean($("notes").value),
+    barcode:lastBarcode,
     savedAt:new Date().toISOString()
   };
-  if(!item.serial){ $("dup").textContent="Serial Number is required."; return; }
-  const items=getItems();
-  if(items.some(x=>x.serial===item.serial)){
-    $("dup").textContent="Already registered: "+item.serial;
+
+  if(!item.serial && !item.id && !item.part){
+    $("saveMsg").textContent="Need at least Serial, ID, or Part # before saving.";
+    $("saveMsg").style.color="#fca5a5";
     return;
   }
-  items.push(item); setItems(items); $("dup").textContent="Saved ✓"; clearForm();
+
+  const dup=findDuplicate(item.serial,item.id,item.part);
+  if(dup){
+    $("saveMsg").textContent=`⚠ Not saved. Already registered: ${dup.type} — ${dup.serial || dup.id || dup.part}`;
+    $("saveMsg").style.color="#fca5a5";
+    return;
+  }
+
+  const items=getItems();
+  items.push(item);
+  setItems(items);
+
+  $("saveMsg").textContent=`Saved ✓ ${item.type} ${item.serial || item.id || item.part}`;
+  $("saveMsg").style.color="#86efac";
+
+  setTimeout(()=>resetForm(true),650);
 };
+
+function resetForm(keepMsg=false){
+  imageDataUrl=""; lastBarcode=""; ocrText="";
+  $("photo").value="";
+  $("preview").src="";
+  $("preview").style.display="none";
+  $("type").value="Pack Control";
+  $("brand").value="Gecko";
+  ["serial","idnum","part","model","rating","date","notes"].forEach(id=>$(id).value="");
+  $("itemStatus").value="Unknown";
+  $("location").value="";
+  $("source").value="Photo Scan";
+  ["serialConf","idConf","partConf","modelConf"].forEach(id=>$(id).textContent="");
+  $("detectBox").classList.add("hidden");
+  $("status").textContent="Ready for next item.";
+  if(!keepMsg) $("saveMsg").textContent="";
+}
+$("resetBtn").onclick=()=>resetForm();
 
 function render(){
   const items=getItems();
-  $("countAll").textContent="Total: "+items.length;
-  $("countSpa").textContent="Spa Packs: "+items.filter(x=>x.type==="Spa Pack").length;
-  $("countHeat").textContent="Heaters: "+items.filter(x=>x.type==="Heater").length;
-  $("rows").innerHTML = items.map((x,i)=>`
-    <tr>
+  $("countAll").textContent=`Total: ${items.length}`;
+  $("countControl").textContent=`Pack Controls: ${items.filter(x=>x.type==="Pack Control").length}`;
+  $("countSpa").textContent=`Spa Packs: ${items.filter(x=>x.type==="Spa Pack").length}`;
+  $("countHeat").textContent=`Heaters: ${items.filter(x=>x.type==="Heater").length}`;
+
+  $("rows").innerHTML=items.slice().reverse().map((x,ri)=>{
+    const i=items.length-1-ri;
+    return `<tr>
       <td>${escapeHtml(x.type)}</td>
       <td><strong>${escapeHtml(x.serial)}</strong></td>
       <td>${escapeHtml(x.id || x.part || "")}</td>
-      <td>${escapeHtml(x.model || "")}</td>
+      <td>${escapeHtml(x.status || "")}</td>
+      <td>${escapeHtml(x.location || "")}</td>
       <td><button class="secondary" style="padding:7px 9px" onclick="removeItem(${i})">✕</button></td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
-function removeItem(i){ const a=getItems(); a.splice(i,1); setItems(a); }
-function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+function removeItem(i){
+  const a=getItems(); a.splice(i,1); setItems(a);
+}
 
 $("csvBtn").onclick=()=>{
-  const a=getItems();
-  if(!a.length) return;
-  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date"];
-  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date]);
+  const a=getItems(); if(!a.length) return;
+  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date","Status","Location","Source","Barcode","Notes","Saved At"];
+  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date,x.status,x.location,x.source,x.barcode,x.notes,x.savedAt]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
-  const blob=new Blob([csv],{type:"text/csv"});
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
-  const link=document.createElement("a"); link.href=url; link.download="gecko_inventory.csv"; link.click();
+  const link=document.createElement("a");
+  link.href=url; link.download="gecko_inventory.csv"; link.click();
   URL.revokeObjectURL(url);
 };
 
 $("wipeBtn").onclick=()=>{
-  if(confirm("Delete the entire saved inventory from this device?")) setItems([]);
+  if(confirm("Delete the entire inventory saved on this device?")) setItems([]);
 };
 
 render();
