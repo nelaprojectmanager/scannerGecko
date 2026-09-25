@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Gecko Inventory Scanner V6</title>
+<title>Gecko Inventory Scanner V7 Precision</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
@@ -103,6 +103,16 @@ th{color:#93c5fd}
 .item-empty{font-size:13px;color:#64748b;padding:10px 4px}
 .type-section{margin-top:6px}
 hr.sep{border:none;border-top:1px solid #273449;margin:18px 0}
+.unitCard{
+  border:1px solid #334155;border-radius:14px;padding:12px;margin-top:10px;background:#0b1220
+}
+.unitCard.selected{border-color:#38bdf8;box-shadow:0 0 0 2px rgba(56,189,248,.12)}
+.unitTop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.unitMeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.unitMeta div{font-size:12px;color:#cbd5e1}
+.unitWarn{color:#fde68a;font-size:12px;margin-top:8px}
+.unitGood{color:#86efac;font-size:12px;margin-top:8px}
+@media(max-width:720px){.unitMeta{grid-template-columns:1fr}}
 @media(max-width:720px){
   .grid2,.grid3,.actions,.fileChoice{grid-template-columns:1fr}
   table{font-size:12px}
@@ -113,7 +123,7 @@ hr.sep{border:none;border-top:1px solid #273449;margin:18px 0}
 <body>
 <div class="wrap">
   <h1>Gecko Inventory Scanner</h1>
-  <p class="sub">Album or camera → queue multiple photos → auto-crop → scan → verify → save.</p>
+  <p class="sub">Album or camera → multi-unit detection → pair Serial + ID by position → verify → save.</p>
 
   <div class="card hero">
     <div class="fileChoice">
@@ -134,8 +144,26 @@ hr.sep{border:none;border-top:1px solid #273449;margin:18px 0}
       <div class="small" id="queueInfo">0 photos queued.</div>
     </div>
 
-    <img id="preview" class="preview" alt="Label preview">
+    <div style="position:relative;margin-top:10px">
+      <img id="preview" class="preview" alt="Label preview" style="margin-top:0">
+      <canvas id="overlay" class="preview hidden" style="position:absolute;left:0;top:0;pointer-events:none;background:transparent"></canvas>
+    </div>
     <div id="previewNote" class="preview-note hidden"></div>
+
+    <div id="multiBox" class="verifybox hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <strong id="multiTitle">Multiple Gecko units detected</strong>
+        <span class="pill warn" id="multiCount">0 units</span>
+      </div>
+      <div class="small" style="margin-top:6px">
+        Serial + ID are paired by label position. QC / DATE / SOFT / REV are stored as metadata and are never used as the primary serial.
+      </div>
+      <div id="unitCards" style="margin-top:10px"></div>
+      <div class="actions">
+        <button id="confirmAllUnitsBtn" class="good">CONFIRM & SAVE ALL</button>
+        <button id="clearUnitsBtn" class="secondary">CLEAR DETECTION</button>
+      </div>
+    </div>
 
     <div class="actions">
       <button id="scanBtn" class="big-btn">SCAN GECKO LABEL</button>
@@ -356,6 +384,9 @@ let uncertainFieldIds = [];
 let photoQueue = [];
 let currentQueueIndex = -1;
 let currentOriginalPhoto = null;
+let detectedUnits = [];
+let activeUnitIndex = -1;
+let lastOcrScale = {x:1,y:1};
 
 function getItems(){
   let current = JSON.parse(localStorage.getItem("geckoInventoryV6") || "[]");
@@ -623,6 +654,250 @@ function scorePattern(value, kind){
   return 75;
 }
 
+
+function groupWordsIntoLines(words){
+  const cleanWords=(words||[]).filter(w=>w && w.text && clean(w.text));
+  const lines=[];
+  for(const w of cleanWords){
+    const cy=(w.bbox.y0+w.bbox.y1)/2;
+    let best=null, bestDist=Infinity;
+    for(const line of lines){
+      const dist=Math.abs(cy-line.cy);
+      const h=Math.max(12, line.h);
+      if(dist < h*0.75 && dist<bestDist){best=line;bestDist=dist;}
+    }
+    if(!best){
+      best={words:[],cy:cy,h:Math.max(12,w.bbox.y1-w.bbox.y0)};
+      lines.push(best);
+    }
+    best.words.push(w);
+    best.cy=(best.cy*(best.words.length-1)+cy)/best.words.length;
+    best.h=Math.max(best.h,w.bbox.y1-w.bbox.y0);
+  }
+  return lines.map(line=>{
+    line.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);
+    const text=line.words.map(w=>w.text).join(" ");
+    const bbox={
+      x0:Math.min(...line.words.map(w=>w.bbox.x0)),
+      y0:Math.min(...line.words.map(w=>w.bbox.y0)),
+      x1:Math.max(...line.words.map(w=>w.bbox.x1)),
+      y1:Math.max(...line.words.map(w=>w.bbox.y1))
+    };
+    return {text,bbox,cy:(bbox.y0+bbox.y1)/2};
+  }).sort((a,b)=>a.cy-b.cy);
+}
+
+function extractCodeNearLabel(lineText, kind){
+  const t=lineText.toUpperCase().replace(/[|]/g,"I");
+  if(kind==="serial"){
+    const after=t.split(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/).pop();
+    let m=after.match(/\b\d{8,10}\s*[A-Z]\b/);
+    if(m) return normalizeCode(m[0]);
+    m=after.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/);
+    if(m && !normalizeCode(m[0]).startsWith("9920")) return normalizeCode(m[0]);
+  }
+  if(kind==="id"){
+    const m=t.match(/\b\d{4}-\d{6}-\d{3}\b/);
+    if(m) return normalizeCode(m[0]);
+  }
+  if(kind==="part"){
+    const m=t.match(/PART\s*#?\s*:?\s*([0-9]{4}-[0-9]{5,7})/);
+    if(m) return normalizeCode(m[1]);
+  }
+  return "";
+}
+
+function parseMetadata(lines, yCenter, radius){
+  const nearby=lines.filter(l=>Math.abs(l.cy-yCenter)<=radius).map(l=>l.text).join(" ");
+  const out={};
+  let m=nearby.match(/FTC\s*:?\s*([A-Z0-9\-]+)/i); if(m) out.ftc=clean(m[1]);
+  m=nearby.match(/DATE\s*:?\s*(20\d{2}[-\/]\d{2}[-\/]\d{2})/i); if(m) out.date=m[1].replaceAll("/","-");
+  m=nearby.match(/SOFT\s*:?\s*([A-Z0-9.\-]+)/i); if(m) out.soft=clean(m[1]);
+  m=nearby.match(/REV\s*:?\s*([A-Z0-9.\-]+)/i); if(m) out.rev=clean(m[1]);
+  return out;
+}
+
+function detectMultipleUnitsFromWords(words){
+  const lines=groupWordsIntoLines(words);
+  const serialCandidates=[];
+  const idCandidates=[];
+  const partCandidates=[];
+
+  for(let i=0;i<lines.length;i++){
+    const l=lines[i];
+    const pairText=l.text+" "+(lines[i+1]?.text||"");
+    if(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/i.test(l.text)){
+      const serial=extractCodeNearLabel(pairText,"serial");
+      if(serial){
+        serialCandidates.push({value:serial,cy:l.cy,bbox:l.bbox,lineIndex:i});
+      }
+    }
+    if(/\bID\s*#|NO\.?\s*#/i.test(l.text) || /\b\d{4}-\d{6}-\d{3}\b/.test(l.text)){
+      const id=extractCodeNearLabel(pairText,"id");
+      if(id) idCandidates.push({value:id,cy:l.cy,bbox:l.bbox,lineIndex:i});
+    }
+    if(/PART\s*#/i.test(l.text)){
+      const part=extractCodeNearLabel(pairText,"part");
+      if(part) partCandidates.push({value:part,cy:l.cy,bbox:l.bbox,lineIndex:i});
+    }
+  }
+
+  // Conservative serial fallback only for Gecko-like S/N values ending in a letter.
+  if(!serialCandidates.length){
+    for(const l of lines){
+      const ms=l.text.toUpperCase().match(/\b\d{8,10}[A-Z]\b/g)||[];
+      for(const v of ms){
+        if(!v.startsWith("9920")) serialCandidates.push({value:v,cy:l.cy,bbox:l.bbox});
+      }
+    }
+  }
+
+  const usedIds=new Set();
+  const units=[];
+  const pageHeight = lines.length ? Math.max(...lines.map(l=>l.bbox.y1)) : 1000;
+  const maxPairDist=Math.max(80,pageHeight*0.18);
+
+  for(const s of serialCandidates){
+    const ranked=idCandidates
+      .map((id,idx)=>({id,idx,dist:Math.abs(id.cy-s.cy)}))
+      .filter(x=>!usedIds.has(x.idx))
+      .sort((a,b)=>a.dist-b.dist);
+
+    let best=ranked[0]||null;
+    let ambiguous=false;
+    if(best && ranked[1] && Math.abs(ranked[1].dist-best.dist) < Math.max(20,best.dist*0.35)) ambiguous=true;
+    if(best && best.dist>maxPairDist) best=null;
+
+    if(best) usedIds.add(best.idx);
+
+    const yMid = best ? (s.cy+best.id.cy)/2 : s.cy;
+    const nearestPart=partCandidates
+      .map(p=>({p,dist:Math.abs(p.cy-yMid)}))
+      .sort((a,b)=>a.dist-b.dist)[0];
+    const part=(nearestPart && nearestPart.dist<maxPairDist) ? nearestPart.p.value : "";
+
+    const meta=parseMetadata(lines,yMid,maxPairDist);
+    const boxes=[s.bbox];
+    if(best) boxes.push(best.id.bbox);
+    if(nearestPart && nearestPart.dist<maxPairDist) boxes.push(nearestPart.p.bbox);
+    const bbox={
+      x0:Math.min(...boxes.map(b=>b.x0)),
+      y0:Math.min(...boxes.map(b=>b.y0)),
+      x1:Math.max(...boxes.map(b=>b.x1)),
+      y1:Math.max(...boxes.map(b=>b.y1))
+    };
+
+    units.push({
+      serial:s.value,
+      id:best ? best.id.value : "",
+      part,
+      type:"Pack Control",
+      metadata:meta,
+      ambiguous,
+      confirmed:false,
+      bbox,
+      confidence: best ? (ambiguous?72:94) : 64
+    });
+  }
+
+  // If OCR found one serial but no ID, still return it for review.
+  return units;
+}
+
+function drawUnitBoxes(units, imageEl){
+  const canvas=$("overlay");
+  if(!units.length || !imageEl.naturalWidth || !imageEl.naturalHeight){
+    canvas.classList.add("hidden");
+    return;
+  }
+  const rect=imageEl.getBoundingClientRect();
+  canvas.width=rect.width*devicePixelRatio;
+  canvas.height=rect.height*devicePixelRatio;
+  canvas.style.width=rect.width+"px";
+  canvas.style.height=rect.height+"px";
+  const ctx=canvas.getContext("2d");
+  ctx.scale(devicePixelRatio,devicePixelRatio);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  // OCR coordinates correspond to working image natural dimensions.
+  const sx=rect.width/imageEl.naturalWidth;
+  const sy=rect.height/imageEl.naturalHeight;
+  ctx.lineWidth=3;
+  ctx.font="bold 14px system-ui";
+  units.forEach((u,i)=>{
+    const pad=12;
+    const x=Math.max(0,u.bbox.x0*sx-pad);
+    const y=Math.max(0,u.bbox.y0*sy-pad);
+    const w=Math.min(rect.width-x,(u.bbox.x1-u.bbox.x0)*sx+pad*2);
+    const h=Math.min(rect.height-y,(u.bbox.y1-u.bbox.y0)*sy+pad*2);
+    ctx.strokeStyle = u.ambiguous ? "#f59e0b" : "#22c55e";
+    ctx.fillStyle = u.ambiguous ? "#f59e0b" : "#22c55e";
+    ctx.strokeRect(x,y,w,h);
+    ctx.fillText(`Unit ${i+1}`,x+4,Math.max(16,y-5));
+  });
+  canvas.classList.remove("hidden");
+}
+
+function renderDetectedUnits(){
+  const box=$("multiBox");
+  if(!detectedUnits.length){
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden");
+  $("multiTitle").textContent = detectedUnits.length>1 ? "Multiple Gecko units detected" : "Gecko unit detected";
+  $("multiCount").textContent = `${detectedUnits.length} unit${detectedUnits.length===1?"":"s"}`;
+  $("unitCards").innerHTML = detectedUnits.map((u,i)=>{
+    const meta=[];
+    if(u.metadata?.date) meta.push(`Date: ${escapeHtml(u.metadata.date)}`);
+    if(u.metadata?.soft) meta.push(`SOFT: ${escapeHtml(u.metadata.soft)}`);
+    if(u.metadata?.rev) meta.push(`REV: ${escapeHtml(u.metadata.rev)}`);
+    if(u.metadata?.ftc) meta.push(`FTC: ${escapeHtml(u.metadata.ftc)}`);
+    return `<div class="unitCard ${activeUnitIndex===i?"selected":""}" onclick="selectDetectedUnit(${i})">
+      <div class="unitTop">
+        <strong>Unit ${i+1}</strong>
+        <span class="pill ${u.ambiguous?"warn":"good"}">${u.ambiguous?"Needs check":"Pair detected"}</span>
+      </div>
+      <div class="unitMeta">
+        <div><b>Serial:</b> ${escapeHtml(u.serial||"—")}</div>
+        <div><b>ID:</b> ${escapeHtml(u.id||"—")}</div>
+        <div><b>Part #:</b> ${escapeHtml(u.part||"—")}</div>
+        <div><b>Confidence:</b> ${u.confidence}%</div>
+      </div>
+      ${meta.length?`<div class="small" style="margin-top:8px">${meta.join(" • ")}</div>`:""}
+      <div class="${u.ambiguous?"unitWarn":"unitGood"}">
+        ${u.ambiguous ? "⚠ Serial/ID pairing is uncertain. Confirm this unit before saving." : "✓ Serial and ID appear to belong to the same physical label group."}
+      </div>
+      <div class="checkline" onclick="event.stopPropagation()">
+        <input id="unitConfirm_${i}" type="checkbox" ${u.confirmed?"checked":""} onchange="toggleUnitConfirm(${i},this.checked)">
+        <label for="unitConfirm_${i}" style="margin:0">I confirm Serial + ID belong to this same Gecko unit.</label>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function selectDetectedUnit(i){
+  activeUnitIndex=i;
+  const u=detectedUnits[i];
+  if(!u) return;
+  $("type").value=u.type||"Pack Control";
+  $("serial").value=u.serial||"";
+  $("idnum").value=u.id||"";
+  $("part").value=u.part||"";
+  if(u.metadata?.date) $("date").value=u.metadata.date;
+  renderDetectedUnits();
+}
+
+function toggleUnitConfirm(i,checked){
+  if(detectedUnits[i]) detectedUnits[i].confirmed=checked;
+}
+
+function clearMultiDetection(){
+  detectedUnits=[];
+  activeUnitIndex=-1;
+  $("multiBox").classList.add("hidden");
+  $("overlay").classList.add("hidden");
+}
 function classifyEquipment(full){
   const t = full.toUpperCase();
   if(/HEATER|HEAT\.WAV|CURRENT COLLECTOR|4\.0KW|240V/.test(t)) return "Heater";
@@ -810,6 +1085,24 @@ $("scanBtn").addEventListener("click", async ()=>{
     ocrText = result.data.text || "";
     const c = extractCandidates(ocrText, barcode);
 
+    detectedUnits = detectMultipleUnitsFromWords(result.data.words || []);
+    activeUnitIndex = detectedUnits.length ? 0 : -1;
+
+    if(detectedUnits.length){
+      // When multiple physical Gecko units are found, use the first one in the form
+      // and keep all units available for separate confirmation.
+      const u=detectedUnits[0];
+      c.type=u.type || c.type;
+      c.serial=u.serial || c.serial;
+      c.id=u.id || c.id;
+      c.part=u.part || c.part;
+      if(u.metadata?.date) c.date=u.metadata.date;
+      renderDetectedUnits();
+      setTimeout(()=>drawUnitBoxes(detectedUnits,$("preview")),50);
+    }else{
+      clearMultiDetection();
+    }
+
     $("type").value = c.type;
     $("serial").value = c.serial;
     $("idnum").value = c.id;
@@ -844,7 +1137,9 @@ $("scanBtn").addEventListener("click", async ()=>{
       $("saveMsg").style.color = "#fca5a5";
     }
 
-    if(issues.length){
+    if(detectedUnits.length>1){
+      $("status").textContent = `${detectedUnits.length} Gecko units detected. Confirm each Serial + ID pair, then use CONFIRM & SAVE ALL.`;
+    }else if(issues.length){
       $("status").textContent = "Scan needs verification: " + issues.join(". ");
     }else if(reasons.length){
       $("status").textContent = "Scan complete. Double confirmation required before saving.";
@@ -862,7 +1157,87 @@ $("checkBtn").onclick=()=>{
   $("saveMsg").style.color = dup ? "#fca5a5" : "#86efac";
 };
 
+
+$("clearUnitsBtn").onclick=()=>clearMultiDetection();
+
+$("confirmAllUnitsBtn").onclick=async ()=>{
+  if(!detectedUnits.length) return;
+  const unconfirmed=detectedUnits.filter(u=>!u.confirmed);
+  if(unconfirmed.length){
+    $("saveMsg").textContent=`Please confirm all ${detectedUnits.length} detected units before saving.`;
+    $("saveMsg").style.color="#fca5a5";
+    return;
+  }
+
+  // Strong safety: refuse impossible serial patterns or 9920 part-number-as-serial.
+  const invalid=detectedUnits.find(u=>!u.serial || u.serial.startsWith("9920") || !/^\d{8,10}[A-Z]$/.test(u.serial));
+  if(invalid){
+    $("saveMsg").textContent=`⚠ One detected unit has an invalid/unusual serial (${invalid.serial||"missing"}). Review it individually before saving.`;
+    $("saveMsg").style.color="#fca5a5";
+    return;
+  }
+
+  const items=getItems();
+  for(const u of detectedUnits){
+    const dup=items.find(x=>(u.serial && x.serial===u.serial) || (u.id && x.id===u.id));
+    if(dup){
+      $("saveMsg").textContent=`⚠ ${u.serial} or ${u.id} is already in inventory. Nothing was saved.`;
+      $("saveMsg").style.color="#fca5a5";
+      return;
+    }
+  }
+
+  const sharedPhotoKey=currentOriginalPhoto ? `photo_${Date.now()}_${Math.random().toString(36).slice(2,8)}` : "";
+  if(sharedPhotoKey && currentOriginalPhoto){
+    try{ await savePhotoToDB(sharedPhotoKey,currentOriginalPhoto); }catch(e){}
+  }
+
+  const createdAt=new Date().toISOString();
+  for(const u of detectedUnits){
+    items.push({
+      type:u.type||"Pack Control",
+      brand:"Gecko",
+      serial:u.serial,
+      id:u.id||"",
+      part:u.part||"",
+      model:"",
+      rating:"",
+      date:u.metadata?.date||"",
+      status:$("itemStatus").value,
+      location:$("location").value,
+      source:lastBarcode ? "Barcode" : lastLoadedSource,
+      barcode:lastBarcode||"",
+      photoKey:sharedPhotoKey,
+      notes:[
+        u.metadata?.ftc ? `FTC ${u.metadata.ftc}` : "",
+        u.metadata?.soft ? `SOFT ${u.metadata.soft}` : "",
+        u.metadata?.rev ? `REV ${u.metadata.rev}` : ""
+      ].filter(Boolean).join(" | "),
+      savedAt:createdAt
+    });
+  }
+  setItems(items);
+  $("saveMsg").textContent=`Saved ✓ ${detectedUnits.length} Gecko units from one photo.`;
+  $("saveMsg").style.color="#86efac";
+
+  if(currentQueueIndex >= 0 && currentQueueIndex < photoQueue.length-1){
+    const next=currentQueueIndex+1;
+    resetForm(true,true);
+    await loadQueueItem(next);
+  }else{
+    photoQueue=[];
+    currentQueueIndex=-1;
+    resetForm(true,false);
+    updateQueueUI();
+  }
+};
+
 $("saveBtn").onclick=()=>{
+  if(detectedUnits.length>1){
+    $("saveMsg").textContent="Multiple units are detected in this photo. Confirm each unit and use CONFIRM & SAVE ALL.";
+    $("saveMsg").style.color="#fca5a5";
+    return;
+  }
   const issues = precisionIssues();
   if(issues.length){
     $("saveMsg").textContent = "⚠ Precision check: " + issues.join(". ") + " — please verify before saving.";
@@ -973,6 +1348,7 @@ function resetForm(keepMsg=false, preserveQueue=false){
   $("confirmType").checked = false;
   $("confirmPart").checked = false;
   clearUncertainMarks();
+  clearMultiDetection();
   $("status").textContent = "Ready for next item.";
   if(!keepMsg) $("saveMsg").textContent = "";
   updateQueueUI();
@@ -1107,7 +1483,10 @@ async function removeItem(i){
   a.splice(i,1);
   setItems(a);
   if(removed && removed.photoKey){
-    try{ await deletePhotoFromDB(removed.photoKey); }catch(e){}
+    const stillUsed=a.some(x=>x.photoKey===removed.photoKey);
+    if(!stillUsed){
+      try{ await deletePhotoFromDB(removed.photoKey); }catch(e){}
+    }
   }
 }
 
