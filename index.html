@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Gecko Scanner</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#f8fafc;
+    --line:#243041; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#0b1220,#111827);color:var(--text)}
+  .wrap{max-width:760px;margin:0 auto;padding:18px}
+  h1{font-size:26px;margin:4px 0 2px}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .card{background:rgba(17,24,39,.96);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 10px 30px rgba(0,0,0,.22)}
+  label{display:block;color:#cbd5e1;font-size:13px;margin:10px 0 6px}
+  input,select,button{width:100%;border-radius:12px;border:1px solid #334155;padding:13px;font-size:16px}
+  input,select{background:#0b1220;color:white}
+  button{background:var(--accent);color:#062033;font-weight:800;border:none;cursor:pointer}
+  button.secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+  button.good{background:var(--ok);color:#052e16}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .status{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
+  .preview{width:100%;max-height:300px;object-fit:contain;border-radius:12px;background:#020617;margin-top:10px;display:none}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .pill{background:#0b1220;border:1px solid #334155;border-radius:999px;padding:8px 11px;color:#cbd5e1;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 8px;border-bottom:1px solid #273449;text-align:left;vertical-align:top}
+  th{color:#93c5fd}
+  .small{font-size:12px;color:var(--muted)}
+  .danger{background:#7f1d1d;color:#fecaca}
+  @media(max-width:620px){
+    .grid,.actions{grid-template-columns:1fr}
+    table{font-size:12px}
+    th:nth-child(4),td:nth-child(4){display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gecko Scanner</h1>
+  <p class="sub">Take a photo → read the label → confirm → save.</p>
+
+  <div class="card">
+    <label>Take or upload photo</label>
+    <input id="photo" type="file" accept="image/*" capture="environment">
+    <img id="preview" class="preview" alt="Preview">
+    <div class="actions">
+      <button id="scanBtn">Scan label</button>
+      <button id="clearBtn" class="secondary">Clear form</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>Equipment Type</label>
+        <select id="type">
+          <option>Spa Pack</option>
+          <option>Heater</option>
+          <option>Pump</option>
+          <option>Board</option>
+          <option>Display</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label>Brand</label>
+        <input id="brand" value="Gecko">
+      </div>
+      <div>
+        <label>Serial Number</label>
+        <input id="serial" placeholder="e.g. 251742174X">
+      </div>
+      <div>
+        <label>ID #</label>
+        <input id="idnum" placeholder="e.g. 0610-221126-751">
+      </div>
+      <div>
+        <label>Part #</label>
+        <input id="part" placeholder="e.g. 9920-101535">
+      </div>
+      <div>
+        <label>Model</label>
+        <input id="model" placeholder="Model">
+      </div>
+      <div>
+        <label>Rating</label>
+        <input id="rating" placeholder="e.g. 240V-4.0KW">
+      </div>
+      <div>
+        <label>Date</label>
+        <input id="date" placeholder="YYYY-MM-DD">
+      </div>
+    </div>
+    <button id="saveBtn" class="good" style="margin-top:14px">Save item</button>
+    <div id="dup" class="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="stats">
+      <span class="pill" id="countAll">Total: 0</span>
+      <span class="pill" id="countSpa">Spa Packs: 0</span>
+      <span class="pill" id="countHeat">Heaters: 0</span>
+    </div>
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr><th>Type</th><th>Serial</th><th>ID / Part</th><th>Model</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button id="csvBtn" class="secondary">Export CSV</button>
+      <button id="wipeBtn" class="danger">Delete all</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let imageDataUrl = "";
+
+function getItems(){ return JSON.parse(localStorage.getItem("geckoInventory") || "[]"); }
+function setItems(items){ localStorage.setItem("geckoInventory", JSON.stringify(items)); render(); }
+
+function clean(s){ return (s||"").replace(/\s+/g," ").trim(); }
+
+$("photo").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ imageDataUrl=r.result; $("preview").src=imageDataUrl; $("preview").style.display="block"; };
+  r.readAsDataURL(f);
+});
+
+$("scanBtn").addEventListener("click", async ()=>{
+  if(!imageDataUrl){ $("status").textContent="Please take or upload a photo first."; return; }
+  $("status").textContent="Reading label…";
+  try{
+    const result = await Tesseract.recognize(imageDataUrl, 'eng', {
+      logger: m => {
+        if(m.status === "recognizing text") $("status").textContent = `Reading label… ${Math.round((m.progress||0)*100)}%`;
+      }
+    });
+    const t = result.data.text.replace(/[|]/g,"I");
+    parseText(t);
+    $("status").textContent="Scan complete. Please confirm the fields before saving.";
+  }catch(e){
+    $("status").textContent="Could not read the image. You can still enter the fields manually.";
+  }
+});
+
+function parseText(text){
+  const lines = text.split(/\n/).map(x=>x.trim()).filter(Boolean);
+  const full = lines.join(" ");
+
+  let serial = "";
+  for(let i=0;i<lines.length;i++){
+    if(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/i.test(lines[i])){
+      const m=(lines[i]+" "+(lines[i+1]||"")).match(/\b[A-Z0-9]{8,14}\b/);
+      if(m){ serial=m[0]; break; }
+    }
+  }
+  if(!serial){
+    const candidates = full.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{9,12}\b/g) || [];
+    serial = candidates.find(x=>!/^\d{4}-\d/.test(x)) || "";
+  }
+
+  const idm = full.match(/\b\d{4}-\d{6}-\d{3}\b/);
+  const partm = full.match(/PART\s*#?\s*:?\s*([0-9-]{8,})/i);
+  const datem = full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
+  const ratingm = full.match(/\b240V[- ]?4\.?0?\s*KW\b/i);
+  const modelm = full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
+
+  if(serial) $("serial").value=serial;
+  if(idm) $("idnum").value=idm[0];
+  if(partm) $("part").value=partm[1];
+  if(datem) $("date").value=datem[0].replaceAll("/","-");
+  if(ratingm) $("rating").value=clean(ratingm[0]);
+  if(modelm) $("model").value=clean(modelm[1]);
+
+  if(/HEATER|HEAT\.WAV|CURRENT COLLECTOR/i.test(full)) $("type").value="Heater";
+  else if(/SPA|PACK|IN\.YE|IN\.XM/i.test(full)) $("type").value="Spa Pack";
+}
+
+function clearForm(){
+  ["serial","idnum","part","model","rating","date"].forEach(id=>$(id).value="");
+  $("type").value="Spa Pack"; $("brand").value="Gecko"; $("dup").textContent="";
+}
+$("clearBtn").onclick=clearForm;
+
+$("saveBtn").onclick=()=>{
+  const item={
+    type:$("type").value, brand:clean($("brand").value), serial:clean($("serial").value).toUpperCase(),
+    id:clean($("idnum").value), part:clean($("part").value), model:clean($("model").value),
+    rating:clean($("rating").value), date:clean($("date").value),
+    savedAt:new Date().toISOString()
+  };
+  if(!item.serial){ $("dup").textContent="Serial Number is required."; return; }
+  const items=getItems();
+  if(items.some(x=>x.serial===item.serial)){
+    $("dup").textContent="Already registered: "+item.serial;
+    return;
+  }
+  items.push(item); setItems(items); $("dup").textContent="Saved ✓"; clearForm();
+};
+
+function render(){
+  const items=getItems();
+  $("countAll").textContent="Total: "+items.length;
+  $("countSpa").textContent="Spa Packs: "+items.filter(x=>x.type==="Spa Pack").length;
+  $("countHeat").textContent="Heaters: "+items.filter(x=>x.type==="Heater").length;
+  $("rows").innerHTML = items.map((x,i)=>`
+    <tr>
+      <td>${escapeHtml(x.type)}</td>
+      <td><strong>${escapeHtml(x.serial)}</strong></td>
+      <td>${escapeHtml(x.id || x.part || "")}</td>
+      <td>${escapeHtml(x.model || "")}</td>
+      <td><button class="secondary" style="padding:7px 9px" onclick="removeItem(${i})">✕</button></td>
+    </tr>`).join("");
+}
+function removeItem(i){ const a=getItems(); a.splice(i,1); setItems(a); }
+function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
+
+$("csvBtn").onclick=()=>{
+  const a=getItems();
+  if(!a.length) return;
+  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date"];
+  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date]);
+  const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a"); link.href=url; link.download="gecko_inventory.csv"; link.click();
+  URL.revokeObjectURL(url);
+};
+
+$("wipeBtn").onclick=()=>{
+  if(confirm("Delete the entire saved inventory from this device?")) setItems([]);
+};
+
+render();
+</script>
+</body>
+</html>
