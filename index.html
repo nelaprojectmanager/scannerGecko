@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Gecko Inventory Scanner V9 Precision</title>
+<title>Gecko Inventory Scanner V10 Precision</title>
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
@@ -261,6 +261,14 @@ hr.sep{border:none;border-top:1px solid #273449;margin:18px 0}
       <div class="field-wrap">
         <label>Date</label>
         <input id="date" autocomplete="off" placeholder="YYYY-MM-DD">
+      </div>
+      <div class="field-wrap">
+        <label>Software</label>
+        <input id="soft" autocomplete="off" placeholder="e.g. 105">
+      </div>
+      <div class="field-wrap">
+        <label>Revision</label>
+        <input id="rev" autocomplete="off" placeholder="e.g. 31.00">
       </div>
     </div>
 
@@ -923,10 +931,103 @@ function classifyEquipment(full){
   return "Pack Control";
 }
 
-function extractCandidates(text, barcode){
+
+function extractByWordPosition(words){
+  const ws=(words||[])
+    .filter(w=>w && w.text && w.bbox)
+    .map(w=>({
+      text:clean(w.text).toUpperCase(),
+      raw:clean(w.text),
+      x0:w.bbox.x0,y0:w.bbox.y0,x1:w.bbox.x1,y1:w.bbox.y1,
+      cx:(w.bbox.x0+w.bbox.x1)/2,
+      cy:(w.bbox.y0+w.bbox.y1)/2,
+      h:Math.max(1,w.bbox.y1-w.bbox.y0)
+    }))
+    .filter(w=>w.text);
+
+  const lines=[];
+  for(const w of ws){
+    let line=lines.find(l=>Math.abs(l.cy-w.cy)<Math.max(10,w.h*0.7));
+    if(!line){
+      line={words:[],cy:w.cy,h:w.h};
+      lines.push(line);
+    }
+    line.words.push(w);
+    line.cy=(line.cy*(line.words.length-1)+w.cy)/line.words.length;
+    line.h=Math.max(line.h,w.h);
+  }
+  lines.forEach(l=>l.words.sort((a,b)=>a.x0-b.x0));
+  lines.sort((a,b)=>a.cy-b.cy);
+
+  const lineText=l=>l.words.map(w=>w.text).join(" ");
+  const result={serial:"",id:"",model:"",soft:"",rev:""};
+
+  for(let i=0;i<lines.length;i++){
+    const txt=lineText(lines[i]);
+    const next=i+1<lines.length ? lineText(lines[i+1]) : "";
+    const combo=txt+" "+next;
+
+    // SERIAL NO. 231601758T
+    if(/SERIAL/.test(txt)){
+      let m=txt.match(/SERIAL\s*(?:NO\.?|NUMBER)?\s*([0-9]{8,10}[A-Z])/);
+      if(!m) m=combo.match(/SERIAL\s*(?:NO\.?|NUMBER)?\s*([0-9]{8,10}[A-Z])/);
+      if(m) result.serial=normalizeCode(m[1]);
+      if(!result.serial){
+        const cand=(txt.match(/\b[0-9]{8,10}[A-Z]\b/g)||[])
+          .find(v=>!v.startsWith("9920"));
+        if(cand) result.serial=normalizeCode(cand);
+      }
+    }
+
+    // ID NUMBER 0607-005036
+    if(/ID\s*(?:NUMBER|NO|#)/.test(txt)){
+      let m=txt.match(/\b\d{4}-\d{6}(?:-\d{3})?\b/);
+      if(!m) m=combo.match(/\b\d{4}-\d{6}(?:-\d{3})?\b/);
+      if(m) result.id=normalizeCode(m[0]);
+    }
+
+    // MODEL: IN.K1000
+    if(/\bMODEL\b/.test(txt)){
+      let m=txt.match(/MODEL\s*:?\s*([A-Z]{1,4}\.?[A-Z0-9.-]{2,})/);
+      if(!m) m=combo.match(/MODEL\s*:?\s*([A-Z]{1,4}\.?[A-Z0-9.-]{2,})/);
+      if(m){
+        const v=normalizeCode(m[1]);
+        if(v && !["SOFT","REV","OPTIONS","SERIAL","NUMBER"].includes(v)) result.model=v;
+      }
+    }
+
+    if(/\bSOFT\b/.test(txt)){
+      const m=txt.match(/SOFT\s*:?\s*([0-9.]+)/) || combo.match(/SOFT\s*:?\s*([0-9.]+)/);
+      if(m) result.soft=clean(m[1]);
+    }
+    if(/\bREV\b/.test(txt)){
+      const m=txt.match(/REV\s*:?\s*([0-9.]+)/) || combo.match(/REV\s*:?\s*([0-9.]+)/);
+      if(m) result.rev=clean(m[1]);
+    }
+  }
+
+  // Conservative fallbacks from isolated tokens.
+  if(!result.serial){
+    const s=ws.map(w=>w.text).find(v=>/^\d{8,10}[A-Z]$/.test(v) && !v.startsWith("9920"));
+    if(s) result.serial=s;
+  }
+  if(!result.id){
+    const id=ws.map(w=>w.text).find(v=>/^\d{4}-\d{6}(?:-\d{3})?$/.test(v));
+    if(id) result.id=id;
+  }
+  if(!result.model){
+    const model=ws.map(w=>w.text).find(v=>/^IN\.[A-Z0-9.-]+$/.test(v));
+    if(model) result.model=model;
+  }
+
+  return result;
+}
+
+function extractCandidates(text, barcode, words){
   const lines = text.split(/\n/).map(x=>x.trim()).filter(Boolean);
   const full = lines.join(" ").replace(/[|]/g,"I");
-  let serial = "";
+  const pos = extractByWordPosition(words || []);
+  let serial = pos.serial || "";
   let serialSource = "OCR";
 
   for(let i=0;i<lines.length;i++){
@@ -951,7 +1052,7 @@ function extractCandidates(text, barcode){
 
   // Explicit SERIAL NO. / SERIAL NUMBER / S/N handling.
   const explicitSerial = full.match(/(?:SERIAL\s*(?:NO\.?|NUMBER)?|S\/N)\s*:?\s*([0-9]{8,10}[A-Z])/i);
-  if(explicitSerial) serial = normalizeCode(explicitSerial[1]);
+  if(!serial && explicitSerial) serial = normalizeCode(explicitSerial[1]);
 
   if(!serial){
     const candidates=(full.toUpperCase().match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g)||[])
@@ -978,11 +1079,13 @@ function extractCandidates(text, barcode){
   return {
     type: classifyEquipment(full),
     serial: normalizeCode(serial),
-    id: idm ? normalizeCode(idm[1] || idm[0]) : (barcodeKind==="id" ? normalizeCode(barcode) : ""),
+    id: pos.id || (idm ? normalizeCode(idm[1] || idm[0]) : (barcodeKind==="id" ? normalizeCode(barcode) : "")),
     part: partm ? partm[1] : (barcodeKind==="part" ? normalizeCode(barcode) : ""),
-    model: modelm ? normalizeCode(modelm[1]).replace(/^OID$/,"") : "",
+    model: pos.model || (modelm ? normalizeCode(modelm[1]).replace(/^OID$/,"") : ""),
     rating: ratingm ? clean(ratingm[0].toUpperCase()) : "",
     date: datem ? datem[0].replaceAll("/", "-") : "",
+    soft: pos.soft || "",
+    rev: pos.rev || "",
     barcodeKind,
     serialSource,
     raw: full
@@ -1111,7 +1214,7 @@ $("scanBtn").addEventListener("click", async ()=>{
     });
 
     ocrText = result.data.text || "";
-    const c = extractCandidates(ocrText, barcode);
+    const c = extractCandidates(ocrText, barcode, result.data.words || []);
 
     detectedUnits = detectMultipleUnitsFromWords(result.data.words || []);
     activeUnitIndex = detectedUnits.length ? 0 : -1;
@@ -1138,6 +1241,8 @@ $("scanBtn").addEventListener("click", async ()=>{
     $("model").value = c.model;
     $("rating").value = c.rating;
     $("date").value = c.date;
+    $("soft").value = c.soft || "";
+    $("rev").value = c.rev || "";
     $("source").value = barcode ? "Barcode" : lastLoadedSource;
 
     setConf("serialConf", scorePattern(c.serial,"serial") + (c.serialSource==="Barcode"?1:0), c.serialSource);
@@ -1291,6 +1396,8 @@ $("saveBtn").onclick=()=>{
     model:normalizeCode($("model").value),
     rating:clean($("rating").value).toUpperCase(),
     date:clean($("date").value),
+    soft:clean($("soft").value),
+    rev:clean($("rev").value),
     status:$("itemStatus").value,
     location:$("location").value,
     source:$("source").value,
@@ -1365,7 +1472,7 @@ function resetForm(keepMsg=false, preserveQueue=false){
   $("previewNote").classList.add("hidden");
   $("type").value = "Pack Control";
   $("brand").value = "Gecko";
-  ["serial","idnum","part","model","rating","date","notes"].forEach(id=>$(id).value="");
+  ["serial","idnum","part","model","rating","date","soft","rev","notes"].forEach(id=>$(id).value="");
   $("itemStatus").value = "Unknown";
   $("location").value = "";
   $("source").value = "Photo Scan";
@@ -1521,8 +1628,8 @@ async function removeItem(i){
 $("csvBtn").onclick=()=>{
   const a = getItems();
   if(!a.length) return;
-  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date","Status","Location","Source","Barcode","Photo Saved","Notes","Saved At"];
-  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date,x.status,x.location,x.source,x.barcode,x.photoKey?"Yes":"No",x.notes,x.savedAt]);
+  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date","Software","Revision","Status","Location","Source","Barcode","Photo Saved","Notes","Saved At"];
+  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date,x.soft||"",x.rev||"",x.status,x.location,x.source,x.barcode,x.photoKey?"Yes":"No",x.notes,x.savedAt]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
