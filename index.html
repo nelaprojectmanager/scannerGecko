@@ -3,66 +3,108 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Gecko Inventory Scanner</title>
+<title>Gecko Inventory Scanner V6</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
 :root{
-  --bg:#0b1220; --card:#111827; --card2:#0f172a; --line:#263244;
-  --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8; --good:#22c55e;
-  --warn:#f59e0b; --bad:#ef4444;
+  --bg:#0b1220; --card:#111827; --line:#263244;
+  --text:#f8fafc; --muted:#94a3b8; --accent:#38bdf8;
+  --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --soft:#1e293b;
 }
 *{box-sizing:border-box}
 body{
-  margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
   background:linear-gradient(180deg,#07111f,#111827 40%,#0b1220);
   color:var(--text);
 }
-.wrap{max-width:840px;margin:0 auto;padding:16px}
+.wrap{max-width:920px;margin:0 auto;padding:16px}
 h1{font-size:26px;margin:4px 0 2px}
+h2{font-size:18px;margin:0 0 10px}
+h3{font-size:16px;margin:0 0 8px;color:#cbd5e1}
 .sub{color:var(--muted);margin:0 0 16px;font-size:14px}
 .card{
-  background:rgba(17,24,39,.96); border:1px solid var(--line);
-  border-radius:18px; padding:16px; margin-bottom:14px;
+  background:rgba(17,24,39,.97);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:16px;
+  margin-bottom:14px;
   box-shadow:0 10px 30px rgba(0,0,0,.22)
 }
 .hero{border-color:#28516a}
 label{display:block;color:#cbd5e1;font-size:13px;margin:10px 0 6px}
 input,select,textarea,button{
-  width:100%; border-radius:12px; border:1px solid #334155; padding:13px; font-size:16px
+  width:100%;
+  border-radius:12px;
+  border:1px solid #334155;
+  padding:13px;
+  font-size:16px;
 }
-input,select,textarea{background:#09111f;color:white}
+input,select,textarea{
+  background:#09111f;color:white;
+  transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
 textarea{min-height:72px;resize:vertical}
-button{background:var(--accent);color:#062033;font-weight:800;border:none;cursor:pointer}
+button{
+  background:var(--accent);color:#062033;font-weight:800;border:none;cursor:pointer
+}
 button.secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
 button.good{background:var(--good);color:#052e16}
-button.warn{background:var(--warn);color:#2a1700}
 button.bad{background:#7f1d1d;color:#fee2e2}
+button.warn{background:var(--warn);color:#2f1b00}
+.big-btn{padding:16px 14px;font-size:18px;border-radius:14px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .preview{
-  width:100%; max-height:330px; object-fit:contain; border-radius:12px;
-  background:#020617; margin-top:10px; display:none
+  width:100%;
+  max-height:340px;
+  object-fit:contain;
+  border-radius:12px;
+  background:#020617;
+  margin-top:10px;
+  display:none
 }
+.preview-note{font-size:12px;color:#a5b4fc;margin-top:8px}
 .status{font-size:14px;color:var(--muted);margin-top:10px;min-height:20px}
-.detect{
+.detect,.verifybox,.cropbox{
   background:#07111f;border:1px solid #334155;border-radius:14px;padding:12px;margin-top:12px
 }
-.detect strong{color:#93c5fd}
+.detect strong,.verifybox strong,.cropbox strong{color:#93c5fd}
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .pill{background:#0b1220;border:1px solid #334155;border-radius:999px;padding:7px 10px;font-size:12px;color:#cbd5e1}
 .pill.good{border-color:#166534;color:#bbf7d0}
 .pill.warn{border-color:#92400e;color:#fde68a}
 .pill.bad{border-color:#991b1b;color:#fecaca}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:10px 8px;border-bottom:1px solid #273449;text-align:left;vertical-align:top}
-th{color:#93c5fd}
 .small{font-size:12px;color:var(--muted)}
 .confidence{font-size:12px;margin-top:5px;color:#cbd5e1}
 .hidden{display:none}
-@media(max-width:680px){
-  .grid2,.grid3,.actions{grid-template-columns:1fr}
+.fileChoice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.fileBox{border:1px dashed #4b5563;border-radius:14px;padding:12px;background:#0b1220}
+.fileBox label{margin:0 0 8px}
+.checkline{display:flex;gap:10px;align-items:flex-start;margin-top:10px}
+.checkline input[type="checkbox"]{width:20px;height:20px;margin-top:2px;accent-color:#38bdf8}
+.field-wrap{position:relative}
+.uncertain{
+  border-color:#eab308 !important;
+  box-shadow:0 0 0 3px rgba(234,179,8,.18);
+  background:rgba(234,179,8,.05) !important;
+}
+.sectionHead{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  margin-top:12px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #273449
+}
+.sectionCount{font-size:12px;color:#93c5fd;background:#0b1220;border:1px solid #334155;border-radius:999px;padding:6px 10px}
+.tablewrap{overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 8px;border-bottom:1px solid #273449;text-align:left;vertical-align:top}
+th{color:#93c5fd}
+.item-empty{font-size:13px;color:#64748b;padding:10px 4px}
+.type-section{margin-top:6px}
+hr.sep{border:none;border-top:1px solid #273449;margin:18px 0}
+@media(max-width:720px){
+  .grid2,.grid3,.actions,.fileChoice{grid-template-columns:1fr}
   table{font-size:12px}
   th:nth-child(5),td:nth-child(5){display:none}
 }
@@ -71,30 +113,67 @@ th{color:#93c5fd}
 <body>
 <div class="wrap">
   <h1>Gecko Inventory Scanner</h1>
-  <p class="sub">Photo → barcode + OCR → review → confirm → next item.</p>
+  <p class="sub">Album or camera → queue multiple photos → auto-crop → scan → verify → save.</p>
 
   <div class="card hero">
-    <label>Take a clear photo of the label</label>
-    <input id="photo" type="file" accept="image/*" capture="environment">
+    <div class="fileChoice">
+      <div class="fileBox">
+        <label><strong>Choose from Photos / Album</strong></label>
+        <input id="photoAlbum" type="file" accept="image/*" multiple>
+        <div class="small">Select one or many customer photos from Messages, WhatsApp, email, etc.</div>
+      </div>
+      <div class="fileBox">
+        <label><strong>Use Camera</strong></label>
+        <input id="photoCamera" type="file" accept="image/*" capture="environment" multiple>
+        <div class="small">Take photos while you work. New photos are added to the scan queue.</div>
+      </div>
+    </div>
+
+    <div id="queueBox" class="cropbox hidden">
+      <div><strong>Photo queue</strong></div>
+      <div class="small" id="queueInfo">0 photos queued.</div>
+    </div>
+
     <img id="preview" class="preview" alt="Label preview">
+    <div id="previewNote" class="preview-note hidden"></div>
 
     <div class="actions">
-      <button id="scanBtn">SCAN GECKO LABEL</button>
-      <button id="resetBtn" class="secondary">NEW ITEM</button>
+      <button id="scanBtn" class="big-btn">SCAN GECKO LABEL</button>
+      <button id="nextBtn" class="secondary big-btn">SCAN NEXT ITEM</button>
     </div>
 
     <div id="status" class="status">Ready.</div>
+
+    <div id="cropBox" class="cropbox hidden">
+      <div><strong>Auto-crop</strong></div>
+      <div class="small" id="cropInfo">No auto-crop yet.</div>
+    </div>
 
     <div id="detectBox" class="detect hidden">
       <div><strong id="detectedType">Detected: —</strong></div>
       <div class="pills" id="confidencePills"></div>
       <div class="small" id="barcodeInfo"></div>
     </div>
+
+    <div id="verifyBox" class="verifybox hidden">
+      <div><strong>Double confirmation required</strong></div>
+      <div class="small" id="verifyReason">Please confirm the important fields before saving.</div>
+
+      <div class="checkline">
+        <input id="confirmType" type="checkbox">
+        <label for="confirmType" style="margin:0">I confirm the equipment type is correct.</label>
+      </div>
+
+      <div class="checkline">
+        <input id="confirmPart" type="checkbox">
+        <label for="confirmPart" style="margin:0">I confirm the Part # / main scanned number is correct.</label>
+      </div>
+    </div>
   </div>
 
   <div class="card">
     <div class="grid2">
-      <div>
+      <div class="field-wrap">
         <label>Equipment Type</label>
         <select id="type">
           <option>Pack Control</option>
@@ -106,45 +185,45 @@ th{color:#93c5fd}
           <option>Other</option>
         </select>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Brand</label>
         <input id="brand" value="Gecko">
       </div>
     </div>
 
     <div class="grid2">
-      <div>
+      <div class="field-wrap">
         <label>Serial Number</label>
         <input id="serial" autocomplete="off" autocapitalize="characters">
         <div id="serialConf" class="confidence"></div>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>ID #</label>
         <input id="idnum" autocomplete="off">
         <div id="idConf" class="confidence"></div>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Part #</label>
         <input id="part" autocomplete="off">
         <div id="partConf" class="confidence"></div>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Model</label>
         <input id="model" autocomplete="off">
         <div id="modelConf" class="confidence"></div>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Rating</label>
         <input id="rating" autocomplete="off">
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Date</label>
         <input id="date" autocomplete="off" placeholder="YYYY-MM-DD">
       </div>
     </div>
 
     <div class="grid3">
-      <div>
+      <div class="field-wrap">
         <label>Status</label>
         <select id="itemStatus">
           <option>Unknown</option>
@@ -155,7 +234,7 @@ th{color:#93c5fd}
           <option>Warranty Return</option>
         </select>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Location</label>
         <select id="location">
           <option></option>
@@ -169,27 +248,41 @@ th{color:#93c5fd}
           <option>Other</option>
         </select>
       </div>
-      <div>
+      <div class="field-wrap">
         <label>Source</label>
         <select id="source">
           <option>Photo Scan</option>
           <option>Barcode</option>
           <option>Manual Check</option>
+          <option>Customer Photo</option>
+          <option>Camera Photo</option>
         </select>
       </div>
     </div>
 
     <label>Notes</label>
-    <textarea id="notes" placeholder="Optional notes only if needed"></textarea>
+    <textarea id="notes" placeholder="Optional notes"></textarea>
 
     <div class="actions">
       <button id="saveBtn" class="good">CONFIRM & SAVE</button>
-      <button id="editCheckBtn" class="secondary">CHECK DUPLICATE</button>
+      <button id="checkBtn" class="secondary">CHECK DUPLICATE</button>
     </div>
     <div id="saveMsg" class="status"></div>
   </div>
 
   <div class="card">
+    <h2>Inventory Search</h2>
+    <div class="grid2">
+      <div>
+        <label>Search by Serial / Part #</label>
+        <input id="searchBox" placeholder="Type serial or part number..." autocomplete="off">
+      </div>
+      <div style="display:flex;align-items:end">
+        <button id="clearSearchBtn" class="secondary">CLEAR SEARCH</button>
+      </div>
+    </div>
+    <div id="searchMsg" class="status"></div>
+
     <div class="pills">
       <span class="pill" id="countAll">Total: 0</span>
       <span class="pill" id="countControl">Pack Controls: 0</span>
@@ -197,18 +290,53 @@ th{color:#93c5fd}
       <span class="pill" id="countHeat">Heaters: 0</span>
     </div>
 
-    <div style="overflow:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
+    <div class="type-section">
+      <div class="sectionHead">
+        <h3>Heaters</h3>
+        <span class="sectionCount" id="heaterCount">0 items</span>
+      </div>
+      <div class="tablewrap"><table><thead>
+        <tr><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th>Model</th><th>Photo</th><th></th></tr>
+      </thead><tbody id="heaterRows"></tbody></table></div>
     </div>
 
-    <div class="actions">
+    <hr class="sep">
+
+    <div class="type-section">
+      <div class="sectionHead">
+        <h3>Pack Controls</h3>
+        <span class="sectionCount" id="controlCount">0 items</span>
+      </div>
+      <div class="tablewrap"><table><thead>
+        <tr><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th>Model</th><th>Photo</th><th></th></tr>
+      </thead><tbody id="controlRows"></tbody></table></div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="type-section">
+      <div class="sectionHead">
+        <h3>Spa Packs</h3>
+        <span class="sectionCount" id="spaCount">0 items</span>
+      </div>
+      <div class="tablewrap"><table><thead>
+        <tr><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th>Model</th><th>Photo</th><th></th></tr>
+      </thead><tbody id="spaRows"></tbody></table></div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="type-section">
+      <div class="sectionHead">
+        <h3>Other Equipment</h3>
+        <span class="sectionCount" id="otherCount">0 items</span>
+      </div>
+      <div class="tablewrap"><table><thead>
+        <tr><th>Type</th><th>Serial</th><th>ID / Part</th><th>Status</th><th>Location</th><th>Photo</th><th></th></tr>
+      </thead><tbody id="otherRows"></tbody></table></div>
+    </div>
+
+    <div class="actions" style="margin-top:16px">
       <button id="csvBtn" class="secondary">EXPORT CSV</button>
       <button id="wipeBtn" class="bad">DELETE ALL</button>
     </div>
@@ -217,15 +345,153 @@ th{color:#93c5fd}
 
 <script>
 const $ = id => document.getElementById(id);
+
 let imageDataUrl = "";
+let workingImageDataUrl = "";
 let lastBarcode = "";
 let ocrText = "";
+let verifyNeeded = false;
+let lastLoadedSource = "Photo Scan";
+let uncertainFieldIds = [];
+let photoQueue = [];
+let currentQueueIndex = -1;
+let currentOriginalPhoto = null;
 
-function getItems(){ return JSON.parse(localStorage.getItem("geckoInventoryV2") || "[]"); }
-function setItems(items){ localStorage.setItem("geckoInventoryV2", JSON.stringify(items)); render(); }
+function getItems(){
+  let current = JSON.parse(localStorage.getItem("geckoInventoryV6") || "[]");
+  if(!current.length){
+    const old = JSON.parse(localStorage.getItem("geckoInventoryV5") || "[]");
+    if(old.length){
+      current = old;
+      localStorage.setItem("geckoInventoryV6", JSON.stringify(current));
+    }
+  }
+  return current;
+}
+function setItems(items){ localStorage.setItem("geckoInventoryV6", JSON.stringify(items)); render(); }
+
+// Store full original photos in IndexedDB so inventory metadata does not hit localStorage limits.
+const PHOTO_DB = "GeckoInventoryPhotos";
+const PHOTO_STORE = "photos";
+
+function openPhotoDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(PHOTO_DB,1);
+    req.onupgradeneeded = ()=> {
+      const db=req.result;
+      if(!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE);
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function savePhotoToDB(key, dataUrl){
+  if(!key || !dataUrl) return;
+  const db=await openPhotoDB();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(PHOTO_STORE,"readwrite");
+    tx.objectStore(PHOTO_STORE).put(dataUrl,key);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+  });
+  db.close();
+}
+async function getPhotoFromDB(key){
+  if(!key) return null;
+  const db=await openPhotoDB();
+  const val=await new Promise((resolve,reject)=>{
+    const tx=db.transaction(PHOTO_STORE,"readonly");
+    const req=tx.objectStore(PHOTO_STORE).get(key);
+    req.onsuccess=()=>resolve(req.result || null);
+    req.onerror=()=>reject(req.error);
+  });
+  db.close();
+  return val;
+}
+async function deletePhotoFromDB(key){
+  if(!key) return;
+  const db=await openPhotoDB();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(PHOTO_STORE,"readwrite");
+    tx.objectStore(PHOTO_STORE).delete(key);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+  });
+  db.close();
+}
 
 function clean(s){ return (s||"").replace(/\s+/g," ").trim(); }
 function normalizeCode(s){ return clean(s).toUpperCase().replace(/[^A-Z0-9\-\.]/g,""); }
+function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])); }
+
+function readFileAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function updateQueueUI(){
+  if(!photoQueue.length){
+    $("queueBox").classList.add("hidden");
+    return;
+  }
+  $("queueBox").classList.remove("hidden");
+  const remaining = photoQueue.length - Math.max(currentQueueIndex,0);
+  $("queueInfo").textContent = `${photoQueue.length} photo${photoQueue.length===1?"":"s"} in queue. Current: ${currentQueueIndex+1}/${photoQueue.length}.`;
+}
+
+async function loadQueueItem(index){
+  if(index < 0 || index >= photoQueue.length) return;
+  currentQueueIndex = index;
+  const q = photoQueue[index];
+  imageDataUrl = q.dataUrl;
+  workingImageDataUrl = q.dataUrl;
+  currentOriginalPhoto = q.dataUrl;
+  lastLoadedSource = q.source;
+  $("source").value = q.source;
+  $("preview").src = q.dataUrl;
+  $("preview").style.display = "block";
+  $("previewNote").textContent = `Original image loaded (${index+1}/${photoQueue.length}).`;
+  $("previewNote").classList.remove("hidden");
+  $("status").textContent = `${q.source} ready. Press SCAN GECKO LABEL.`;
+  $("cropBox").classList.add("hidden");
+  clearUncertainMarks();
+  updateQueueUI();
+}
+
+function attachLoader(inputId, sourceLabel){
+  $(inputId).addEventListener("change", async e=>{
+    const files=[...e.target.files];
+    if(!files.length) return;
+
+    for(const f of files){
+      const dataUrl = await readFileAsDataURL(f);
+      photoQueue.push({
+        dataUrl,
+        source:sourceLabel,
+        name:f.name || "photo",
+        addedAt:new Date().toISOString()
+      });
+    }
+
+    // Always load the first newly queued photo if no current item is active.
+    if(currentQueueIndex < 0 || !imageDataUrl){
+      await loadQueueItem(Math.max(0, photoQueue.length-files.length));
+    }else{
+      updateQueueUI();
+      $("status").textContent = `${files.length} photo${files.length===1?"":"s"} added to queue.`;
+    }
+
+    // Allow taking/selecting more photos with the same input.
+    e.target.value="";
+  });
+}
+attachLoader("photoAlbum","Customer Photo");
+attachLoader("photoCamera","Camera Photo");
+
 function setConf(id, score, label){
   const el=$(id);
   if(!score){ el.textContent=""; return; }
@@ -233,26 +499,107 @@ function setConf(id, score, label){
   el.textContent=`${label || "Confidence"}: ${pct}%`;
   el.style.color = pct>=90 ? "#86efac" : pct>=75 ? "#fde68a" : "#fca5a5";
 }
-function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
 
-$("photo").addEventListener("change", e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{
-    imageDataUrl=r.result;
-    $("preview").src=imageDataUrl;
-    $("preview").style.display="block";
-    $("status").textContent="Photo ready. Press SCAN GECKO LABEL.";
-  };
-  r.readAsDataURL(f);
-});
+function clearUncertainMarks(){
+  uncertainFieldIds.forEach(id => { if($(id)) $(id).classList.remove("uncertain"); });
+  uncertainFieldIds = [];
+}
 
-async function decodeBarcodeFromImage(imgEl){
-  lastBarcode="";
+function markUncertain(ids){
+  clearUncertainMarks();
+  uncertainFieldIds = [...new Set(ids.filter(Boolean))];
+  uncertainFieldIds.forEach(id => { if($(id)) $(id).classList.add("uncertain"); });
+}
+
+async function loadImage(url){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function autoCropLabel(dataUrl){
+  try{
+    const img = await loadImage(dataUrl);
+    const maxW = 900;
+    const scale = img.width > maxW ? maxW / img.width : 1;
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", {willReadFrequently:true});
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let minX = w, minY = h, maxX = 0, maxY = 0, found = false;
+
+    for(let y=0; y<h; y+=2){
+      for(let x=0; x<w; x+=2){
+        const i = (y*w + x)*4;
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const bright = (r+g+b)/3;
+        const maxc = Math.max(r,g,b);
+        const minc = Math.min(r,g,b);
+        const sat = maxc - minc;
+        // White/label-ish area heuristic
+        if(bright > 168 && sat < 75){
+          if(x < minX) minX = x;
+          if(y < minY) minY = y;
+          if(x > maxX) maxX = x;
+          if(y > maxY) maxY = y;
+          found = true;
+        }
+      }
+    }
+
+    if(!found) return {success:false, reason:"No bright label area found"};
+
+    let bw = maxX - minX;
+    let bh = maxY - minY;
+    if(bw < w * 0.15 || bh < h * 0.08) return {success:false, reason:"Detected area too small"};
+
+    const marginX = Math.round(bw * 0.08);
+    const marginY = Math.round(bh * 0.12);
+    minX = Math.max(0, minX - marginX);
+    minY = Math.max(0, minY - marginY);
+    maxX = Math.min(w, maxX + marginX);
+    maxY = Math.min(h, maxY + marginY);
+    bw = maxX - minX;
+    bh = maxY - minY;
+
+    // Crop from original image for best OCR
+    const sx = Math.round(minX / scale);
+    const sy = Math.round(minY / scale);
+    const sw = Math.round(bw / scale);
+    const sh = Math.round(bh / scale);
+
+    const out = document.createElement("canvas");
+    out.width = sw;
+    out.height = sh;
+    const octx = out.getContext("2d");
+    octx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    return {
+      success:true,
+      dataUrl: out.toDataURL("image/jpeg", 0.95),
+      bounds: {x:sx,y:sy,w:sw,h:sh}
+    };
+  } catch(e){
+    return {success:false, reason:"Crop failed"};
+  }
+}
+
+async function decodeBarcodeFromDataUrl(dataUrl){
+  lastBarcode = "";
   try{
     if(!window.ZXing) return "";
+    const tempImg = await loadImage(dataUrl);
     const reader = new ZXing.BrowserMultiFormatReader();
-    const result = await reader.decodeFromImageElement(imgEl);
+    const result = await reader.decodeFromImageElement(tempImg);
     if(result && result.text){
       lastBarcode = clean(result.text);
       return lastBarcode;
@@ -264,28 +611,22 @@ async function decodeBarcodeFromImage(imgEl){
 function scorePattern(value, kind){
   if(!value) return 0;
   if(kind==="serial"){
-    let s=65;
-    if(/^[A-Z0-9]{8,14}$/.test(value)) s+=20;
-    if(/[A-Z]$/.test(value)) s+=8;
-    if(/\d{6,}/.test(value)) s+=5;
-    return Math.min(98,s);
+    let s = 65;
+    if(/^[A-Z0-9]{8,14}$/.test(value)) s += 18;
+    if(/[A-Z]$/.test(value)) s += 8;
+    if(/\d{6,}/.test(value)) s += 5;
+    return Math.min(98, s);
   }
-  if(kind==="id"){
-    return /^\d{4}-\d{6}-\d{3}$/.test(value) ? 98 : 72;
-  }
-  if(kind==="part"){
-    return /^\d{4}-\d{6}$/.test(value) || /^\d{4}-\d{5,7}$/.test(value) ? 96 : 74;
-  }
-  if(kind==="model"){
-    return /[A-Z]/.test(value) && /[-\.]/.test(value) ? 90 : 75;
-  }
+  if(kind==="id") return /^\d{4}-\d{6}-\d{3}$/.test(value) ? 98 : 72;
+  if(kind==="part") return /^\d{4}-\d{5,7}$/.test(value) ? 96 : 74;
+  if(kind==="model") return /[A-Z]/.test(value) && /[-\.]/.test(value) ? 90 : 75;
   return 75;
 }
 
 function classifyEquipment(full){
-  const t=full.toUpperCase();
+  const t = full.toUpperCase();
   if(/HEATER|HEAT\.WAV|CURRENT COLLECTOR|4\.0KW|240V/.test(t)) return "Heater";
-  if(/\bIN\.(XE|YE|YT|XM|YT-7|YT-8|YJ)\b|PACK CONTROL|SPA CONTROL|CONTROL PACK/.test(t)) return "Pack Control";
+  if(/\bIN\.(XE|YE|YT|XM|YJ|YK)\b|PACK CONTROL|SPA CONTROL|CONTROL PACK/.test(t)) return "Pack Control";
   if(/SPA PACK/.test(t)) return "Spa Pack";
   if(/PUMP|HP\b|HORSEPOWER/.test(t)) return "Pump";
   if(/DISPLAY|TOPSIDE|KEYPAD/.test(t)) return "Display";
@@ -294,43 +635,41 @@ function classifyEquipment(full){
 }
 
 function extractCandidates(text, barcode){
-  const lines=text.split(/\n/).map(x=>x.trim()).filter(Boolean);
-  const full=lines.join(" ").replace(/[|]/g,"I");
+  const lines = text.split(/\n/).map(x=>x.trim()).filter(Boolean);
+  const full = lines.join(" ").replace(/[|]/g,"I");
+  let serial = "";
+  let serialSource = "OCR";
 
-  let serial="";
-  let serialSource="OCR";
-
-  // Prefer nearby SERIAL / S/N labels
   for(let i=0;i<lines.length;i++){
     if(/SERIAL|S\/N|NO\.?\s*S[ÉE]RIE/i.test(lines[i])){
       const near=(lines[i]+" "+(lines[i+1]||"")).toUpperCase();
-      const c=near.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g) || [];
-      serial=c.find(v=>!/^20\d{2}$/.test(v)) || "";
+      const heaterSN = near.match(/\b\d{8,10}\s*[A-Z]\b/);
+      const generalSN = near.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/);
+      serial = heaterSN ? heaterSN[0].replace(/\s+/g,"") : (generalSN ? generalSN[0] : "");
       if(serial) break;
     }
   }
 
-  const idm=full.match(/\b\d{4}-\d{6}-\d{3}\b/);
-  const partm=full.match(/PART\s*#?\s*:?\s*([0-9]{4}-[0-9]{5,7})/i);
-  const datem=full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
-  const ratingm=full.match(/\b240V[- ]?4\.?0?\s*KW\b/i);
-  const modelm=full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
+  const idm = full.match(/\b\d{4}-\d{6}-\d{3}\b/);
+  const partm = full.match(/PART\s*#?\s*:?\s*([0-9]{4}-[0-9]{5,7})/i);
+  const datem = full.match(/\b20\d{2}[-\/]\d{2}[-\/]\d{2}\b/);
+  const ratingm = full.match(/\b\d{3}V[- ]?\d\.?\d?\s*KW\b/i);
+  const modelm = full.match(/MODEL\s*:?\s*([A-Z0-9.\-]+(?:-[A-Z0-9]+)*)/i);
 
   if(!serial){
     const candidates=(full.toUpperCase().match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,14}\b/g)||[])
-      .filter(x=>!x.includes("0610") && !/^20\d{6}$/.test(x));
-    serial=candidates.find(x=>/[A-Z]$/.test(x)) || candidates[0] || "";
+      .filter(x=>!x.includes("0610") && !x.startsWith("9920") && !/^20\d{6}$/.test(x));
+    serial = candidates.find(x=>/^\d{8,10}[A-Z]$/.test(x)) ||
+             candidates.find(x=>/[A-Z]$/.test(x)) || "";
   }
 
-  // If barcode looks like a serial or Gecko ID, use it as a high confidence source
-  let barcodeKind="";
+  let barcodeKind = "";
   if(barcode){
-    const b=normalizeCode(barcode);
-    if(/^\d{4}-\d{6}-\d{3}$/.test(b)) barcodeKind="id";
-    else if(/^[A-Z0-9]{8,14}$/.test(b)) barcodeKind="serial";
-    else if(/^\d{4}-\d{5,7}$/.test(b)) barcodeKind="part";
-
-    if(barcodeKind==="serial"){ serial=b; serialSource="Barcode"; }
+    const b = normalizeCode(barcode);
+    if(/^\d{4}-\d{6}-\d{3}$/.test(b)) barcodeKind = "id";
+    else if(/^[A-Z0-9]{8,14}$/.test(b)) barcodeKind = "serial";
+    else if(/^\d{4}-\d{5,7}$/.test(b)) barcodeKind = "part";
+    if(barcodeKind==="serial"){ serial = b; serialSource = "Barcode"; }
   }
 
   return {
@@ -340,70 +679,63 @@ function extractCandidates(text, barcode){
     part: partm ? partm[1] : (barcodeKind==="part" ? normalizeCode(barcode) : ""),
     model: modelm ? normalizeCode(modelm[1]) : "",
     rating: ratingm ? clean(ratingm[0].toUpperCase()) : "",
-    date: datem ? datem[0].replaceAll("/","-") : "",
+    date: datem ? datem[0].replaceAll("/", "-") : "",
     barcodeKind,
-    serialSource
+    serialSource,
+    raw: full
   };
 }
 
-$("scanBtn").addEventListener("click", async ()=>{
-  if(!imageDataUrl){
-    $("status").textContent="Take or upload a photo first.";
-    return;
+function precisionIssues(){
+  const issues=[];
+  const type=$("type").value;
+  const serial=normalizeCode($("serial").value);
+  const part=normalizeCode($("part").value);
+
+  if(type==="Heater"){
+    if(serial && !/^\d{8,10}[A-Z]$/.test(serial)) issues.push("Heater serial format looks unusual");
+    if(serial.startsWith("9920")) issues.push("This looks like a Part #, not a heater serial");
   }
+  if(part && !/^\d{4}-\d{5,7}$/.test(part)) issues.push("Part # format looks unusual");
+  return issues;
+}
 
-  $("status").textContent="Step 1/2: checking barcode…";
-  const barcode = await decodeBarcodeFromImage($("preview"));
+function ambiguityReasons(rawText){
+  const reasons=[];
+  const raw=(rawText||ocrText||"").toUpperCase();
+  const type=$("type").value;
+  const part=normalizeCode($("part").value);
+  const serial=normalizeCode($("serial").value);
 
-  $("status").textContent="Step 2/2: reading printed label…";
-  try{
-    const result=await Tesseract.recognize(imageDataUrl,'eng',{
-      logger:m=>{
-        if(m.status==="recognizing text"){
-          $("status").textContent=`Reading printed label… ${Math.round((m.progress||0)*100)}%`;
-        }
-      }
-    });
+  const heaterCue = /HEATER|HEAT\.WAV|CURRENT COLLECTOR/.test(raw);
+  const packCue = /\bIN\.(XE|YE|YT|XM|YJ|YK)\b|PACK CONTROL|SPA CONTROL|SPA PACK/.test(raw);
 
-    ocrText=result.data.text || "";
-    const c=extractCandidates(ocrText,barcode);
-
-    $("type").value=c.type;
-    $("serial").value=c.serial;
-    $("idnum").value=c.id;
-    $("part").value=c.part;
-    $("model").value=c.model;
-    $("rating").value=c.rating;
-    $("date").value=c.date;
-    $("source").value = barcode ? "Barcode" : "Photo Scan";
-
-    setConf("serialConf", scorePattern(c.serial,"serial") + (c.serialSource==="Barcode"?1:0), c.serialSource);
-    setConf("idConf", scorePattern(c.id,"id"), c.barcodeKind==="id"?"Barcode":"OCR");
-    setConf("partConf", scorePattern(c.part,"part"), c.barcodeKind==="part"?"Barcode":"OCR");
-    setConf("modelConf", scorePattern(c.model,"model"), "OCR");
-
-    $("detectBox").classList.remove("hidden");
-    $("detectedType").textContent=`Detected: ${c.type}`;
-    $("barcodeInfo").textContent = barcode ? `Barcode read: ${barcode}` : "No barcode decoded; using printed text OCR.";
-    $("confidencePills").innerHTML = `
-      <span class="pill ${c.serial ? "good":"bad"}">Serial ${c.serial ? "found":"missing"}</span>
-      <span class="pill ${c.id || c.part ? "good":"warn"}">ID/Part ${c.id || c.part ? "found":"check"}</span>
-      <span class="pill ${c.model ? "good":"warn"}">Model ${c.model ? "found":"optional"}</span>
-    `;
-
-    const dup=findDuplicate(c.serial,c.id,c.part);
-    if(dup){
-      $("saveMsg").textContent=`⚠ Already registered: ${dup.serial || dup.id || dup.part}`;
-      $("saveMsg").style.color="#fca5a5";
-    }else{
-      $("saveMsg").textContent="";
-    }
-
-    $("status").textContent="Scan complete. Review the highlighted fields and press CONFIRM & SAVE.";
-  }catch(e){
-    $("status").textContent="OCR could not read this photo. Try a closer, straighter photo with less glare.";
+  if((type==="Heater" || type==="Pack Control" || type==="Spa Pack") && part){
+    reasons.push("Part number is important for this item");
   }
-});
+  if(heaterCue && packCue){
+    reasons.push("The scan detected cues for more than one equipment type");
+  }
+  if(!lastBarcode){
+    reasons.push("No barcode was decoded, so this scan relies on OCR");
+  }
+  if((type==="Heater" || type==="Pack Control" || type==="Spa Pack") && (!serial || !part)){
+    reasons.push("A key field may still need a human check");
+  }
+  return [...new Set(reasons)];
+}
+
+function showDoubleConfirm(reasons){
+  verifyNeeded = reasons.length > 0;
+  $("confirmType").checked = false;
+  $("confirmPart").checked = false;
+  if(verifyNeeded){
+    $("verifyBox").classList.remove("hidden");
+    $("verifyReason").textContent = reasons.join(". ") + ". Please confirm before saving.";
+  }else{
+    $("verifyBox").classList.add("hidden");
+  }
+}
 
 function findDuplicate(serial,id,part){
   const items=getItems();
@@ -414,14 +746,140 @@ function findDuplicate(serial,id,part){
   );
 }
 
-$("editCheckBtn").onclick=()=>{
-  const dup=findDuplicate(normalizeCode($("serial").value),normalizeCode($("idnum").value),normalizeCode($("part").value));
+function assessUncertainFields(c){
+  const uncertain = [];
+  if(scorePattern(c.serial, "serial") < 85 || !c.serial) uncertain.push("serial");
+  if(c.id && scorePattern(c.id, "id") < 90) uncertain.push("idnum");
+  if(c.part && scorePattern(c.part, "part") < 90) uncertain.push("part");
+  if(c.model && scorePattern(c.model, "model") < 85) uncertain.push("model");
+
+  const issues = precisionIssues();
+  if(issues.length){
+    if($("type").value === "Heater") uncertain.push("serial");
+    if($("part").value) uncertain.push("part");
+  }
+
+  const reasons = ambiguityReasons(c.raw);
+  if(reasons.length){
+    uncertain.push("type");
+    if($("part").value) uncertain.push("part");
+  }
+  markUncertain(uncertain);
+}
+
+$("scanBtn").addEventListener("click", async ()=>{
+  if(!imageDataUrl){
+    $("status").textContent = "Choose a photo from your album or use the camera first.";
+    return;
+  }
+
+  clearUncertainMarks();
+  $("saveMsg").textContent = "";
+  $("status").textContent = "Step 1/3: auto-cropping label…";
+
+  const crop = await autoCropLabel(imageDataUrl);
+  if(crop.success){
+    workingImageDataUrl = crop.dataUrl;
+    $("preview").src = workingImageDataUrl;
+    $("previewNote").textContent = "Auto-crop applied. The preview now shows the detected label area.";
+    $("previewNote").classList.remove("hidden");
+    $("cropBox").classList.remove("hidden");
+    $("cropInfo").textContent = `Label auto-cropped successfully.`;
+  }else{
+    workingImageDataUrl = imageDataUrl;
+    $("preview").src = imageDataUrl;
+    $("previewNote").textContent = "Auto-crop was not used. Scanning the full image instead.";
+    $("previewNote").classList.remove("hidden");
+    $("cropBox").classList.remove("hidden");
+    $("cropInfo").textContent = `Auto-crop not applied: ${crop.reason}.`;
+  }
+
+  $("status").textContent = "Step 2/3: checking barcode…";
+  const barcode = await decodeBarcodeFromDataUrl(workingImageDataUrl);
+
+  $("status").textContent = "Step 3/3: reading printed label…";
+  try{
+    const result = await Tesseract.recognize(workingImageDataUrl, 'eng', {
+      logger:m=>{
+        if(m.status==="recognizing text"){
+          $("status").textContent = `Reading printed label… ${Math.round((m.progress||0)*100)}%`;
+        }
+      }
+    });
+
+    ocrText = result.data.text || "";
+    const c = extractCandidates(ocrText, barcode);
+
+    $("type").value = c.type;
+    $("serial").value = c.serial;
+    $("idnum").value = c.id;
+    $("part").value = c.part;
+    $("model").value = c.model;
+    $("rating").value = c.rating;
+    $("date").value = c.date;
+    $("source").value = barcode ? "Barcode" : lastLoadedSource;
+
+    setConf("serialConf", scorePattern(c.serial,"serial") + (c.serialSource==="Barcode"?1:0), c.serialSource);
+    setConf("idConf", scorePattern(c.id,"id"), c.barcodeKind==="id"?"Barcode":"OCR");
+    setConf("partConf", scorePattern(c.part,"part"), c.barcodeKind==="part"?"Barcode":"OCR");
+    setConf("modelConf", scorePattern(c.model,"model"), "OCR");
+
+    $("detectBox").classList.remove("hidden");
+    $("detectedType").textContent = `Detected: ${c.type}`;
+    $("barcodeInfo").textContent = barcode ? `Barcode read: ${barcode}` : "No barcode decoded; using printed text OCR.";
+    $("confidencePills").innerHTML = `
+      <span class="pill ${c.serial ? "good":"bad"}">Serial ${c.serial ? "found":"missing"}</span>
+      <span class="pill ${c.id || c.part ? "good":"warn"}">ID/Part ${c.id || c.part ? "found":"check"}</span>
+      <span class="pill ${c.model ? "good":"warn"}">Model ${c.model ? "found":"optional"}</span>
+    `;
+
+    const issues = precisionIssues();
+    const reasons = ambiguityReasons(c.raw);
+    showDoubleConfirm(reasons);
+    assessUncertainFields(c);
+
+    const dup = findDuplicate(c.serial,c.id,c.part);
+    if(dup){
+      $("saveMsg").textContent = `⚠ Already registered: ${dup.serial || dup.id || dup.part}`;
+      $("saveMsg").style.color = "#fca5a5";
+    }
+
+    if(issues.length){
+      $("status").textContent = "Scan needs verification: " + issues.join(". ");
+    }else if(reasons.length){
+      $("status").textContent = "Scan complete. Double confirmation required before saving.";
+    }else{
+      $("status").textContent = "Scan complete. Review the fields and press CONFIRM & SAVE.";
+    }
+  }catch(e){
+    $("status").textContent = "OCR could not read this photo. Try a closer, straighter photo with less glare.";
+  }
+});
+
+$("checkBtn").onclick=()=>{
+  const dup = findDuplicate(normalizeCode($("serial").value),normalizeCode($("idnum").value),normalizeCode($("part").value));
   $("saveMsg").textContent = dup ? `⚠ Duplicate found: ${dup.type} — ${dup.serial || dup.id || dup.part}` : "No duplicate found.";
   $("saveMsg").style.color = dup ? "#fca5a5" : "#86efac";
 };
 
 $("saveBtn").onclick=()=>{
-  const item={
+  const issues = precisionIssues();
+  if(issues.length){
+    $("saveMsg").textContent = "⚠ Precision check: " + issues.join(". ") + " — please verify before saving.";
+    $("saveMsg").style.color = "#fca5a5";
+    return;
+  }
+
+  if(verifyNeeded){
+    if(!$("confirmType").checked || !$("confirmPart").checked){
+      $("saveMsg").textContent = "Please complete the double confirmation before saving.";
+      $("saveMsg").style.color = "#fca5a5";
+      return;
+    }
+  }
+
+  const photoKey = `photo_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const item = {
     type:$("type").value,
     brand:clean($("brand").value)||"Gecko",
     serial:normalizeCode($("serial").value),
@@ -435,87 +893,235 @@ $("saveBtn").onclick=()=>{
     source:$("source").value,
     notes:clean($("notes").value),
     barcode:lastBarcode,
+    photoKey: currentOriginalPhoto ? photoKey : "",
     savedAt:new Date().toISOString()
   };
 
   if(!item.serial && !item.id && !item.part){
-    $("saveMsg").textContent="Need at least Serial, ID, or Part # before saving.";
-    $("saveMsg").style.color="#fca5a5";
+    $("saveMsg").textContent = "Need at least Serial, ID, or Part # before saving.";
+    $("saveMsg").style.color = "#fca5a5";
     return;
   }
 
-  const dup=findDuplicate(item.serial,item.id,item.part);
+  const dup = findDuplicate(item.serial,item.id,item.part);
   if(dup){
-    $("saveMsg").textContent=`⚠ Not saved. Already registered: ${dup.type} — ${dup.serial || dup.id || dup.part}`;
-    $("saveMsg").style.color="#fca5a5";
+    $("saveMsg").textContent = `⚠ Not saved. Already registered: ${dup.type} — ${dup.serial || dup.id || dup.part}`;
+    $("saveMsg").style.color = "#fca5a5";
     return;
   }
 
-  const items=getItems();
+  const items = getItems();
   items.push(item);
-  setItems(items);
 
-  $("saveMsg").textContent=`Saved ✓ ${item.type} ${item.serial || item.id || item.part}`;
-  $("saveMsg").style.color="#86efac";
+  const finishSave = async ()=>{
+    if(item.photoKey && currentOriginalPhoto){
+      try{
+        await savePhotoToDB(item.photoKey, currentOriginalPhoto);
+      }catch(e){
+        item.photoKey="";
+      }
+    }
+    setItems(items);
+    $("saveMsg").textContent = `Saved ✓ ${item.type} ${item.serial || item.id || item.part}`;
+    $("saveMsg").style.color = "#86efac";
 
-  setTimeout(()=>resetForm(true),650);
+    // Move directly to next queued photo if available.
+    if(currentQueueIndex >= 0 && currentQueueIndex < photoQueue.length-1){
+      const nextIndex=currentQueueIndex+1;
+      resetForm(true, true);
+      await loadQueueItem(nextIndex);
+      $("status").textContent = `Next queued photo ready (${nextIndex+1}/${photoQueue.length}). Press SCAN GECKO LABEL.`;
+    }else{
+      // Queue finished.
+      photoQueue=[];
+      currentQueueIndex=-1;
+      resetForm(true, false);
+      updateQueueUI();
+    }
+  };
+  finishSave();
 };
 
-function resetForm(keepMsg=false){
-  imageDataUrl=""; lastBarcode=""; ocrText="";
-  $("photo").value="";
-  $("preview").src="";
-  $("preview").style.display="none";
-  $("type").value="Pack Control";
-  $("brand").value="Gecko";
+function resetForm(keepMsg=false, preserveQueue=false){
+  imageDataUrl = "";
+  workingImageDataUrl = "";
+  currentOriginalPhoto = null;
+  lastBarcode = "";
+  ocrText = "";
+  verifyNeeded = false;
+  lastLoadedSource = "Photo Scan";
+  $("photoAlbum").value = "";
+  $("photoCamera").value = "";
+  if(!preserveQueue){
+    photoQueue=[];
+    currentQueueIndex=-1;
+  }
+  $("preview").src = "";
+  $("preview").style.display = "none";
+  $("previewNote").textContent = "";
+  $("previewNote").classList.add("hidden");
+  $("type").value = "Pack Control";
+  $("brand").value = "Gecko";
   ["serial","idnum","part","model","rating","date","notes"].forEach(id=>$(id).value="");
-  $("itemStatus").value="Unknown";
-  $("location").value="";
-  $("source").value="Photo Scan";
+  $("itemStatus").value = "Unknown";
+  $("location").value = "";
+  $("source").value = "Photo Scan";
   ["serialConf","idConf","partConf","modelConf"].forEach(id=>$(id).textContent="");
   $("detectBox").classList.add("hidden");
-  $("status").textContent="Ready for next item.";
-  if(!keepMsg) $("saveMsg").textContent="";
+  $("verifyBox").classList.add("hidden");
+  $("cropBox").classList.add("hidden");
+  $("confirmType").checked = false;
+  $("confirmPart").checked = false;
+  clearUncertainMarks();
+  $("status").textContent = "Ready for next item.";
+  if(!keepMsg) $("saveMsg").textContent = "";
+  updateQueueUI();
 }
-$("resetBtn").onclick=()=>resetForm();
+$("nextBtn").onclick = async ()=>{
+  if(photoQueue.length && currentQueueIndex < photoQueue.length-1){
+    const next=currentQueueIndex+1;
+    resetForm(false,true);
+    await loadQueueItem(next);
+  }else{
+    resetForm();
+  }
+};
+$("wipeBtn").onclick = async ()=>{
+  if(!confirm("Delete the entire inventory and saved photos from this device?")) return;
+  const a=getItems();
+  for(const item of a){
+    if(item.photoKey){
+      try{ await deletePhotoFromDB(item.photoKey); }catch(e){}
+    }
+  }
+  setItems([]);
+};
 
-function render(){
+
+function normalizedSearch(){
+  return normalizeCode($("searchBox").value);
+}
+function itemMatchesSearch(x, q){
+  if(!q) return true;
+  const hay=[
+    normalizeCode(x.serial),
+    normalizeCode(x.part),
+    normalizeCode(x.id),
+    normalizeCode(x.model)
+  ];
+  return hay.some(v=>v.includes(q));
+}
+$("searchBox").addEventListener("input", ()=>{
+  const q=normalizedSearch();
   const items=getItems();
-  $("countAll").textContent=`Total: ${items.length}`;
-  $("countControl").textContent=`Pack Controls: ${items.filter(x=>x.type==="Pack Control").length}`;
-  $("countSpa").textContent=`Spa Packs: ${items.filter(x=>x.type==="Spa Pack").length}`;
-  $("countHeat").textContent=`Heaters: ${items.filter(x=>x.type==="Heater").length}`;
+  const matches=items.filter(x=>itemMatchesSearch(x,q)).length;
+  $("searchMsg").textContent = q ? `${matches} match${matches===1?"":"es"} found.` : "";
+  render();
+});
+$("clearSearchBtn").onclick=()=>{
+  $("searchBox").value="";
+  $("searchMsg").textContent="";
+  render();
+};
 
-  $("rows").innerHTML=items.slice().reverse().map((x,ri)=>{
-    const i=items.length-1-ri;
+async function viewPhoto(photoKey){
+  if(!photoKey){
+    alert("No original photo saved for this record.");
+    return;
+  }
+  try{
+    const dataUrl=await getPhotoFromDB(photoKey);
+    if(!dataUrl){
+      alert("Original photo is not available on this device.");
+      return;
+    }
+    const win=window.open();
+    if(win){
+      win.document.write(`<title>Saved Gecko Photo</title><body style="margin:0;background:#020617;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${dataUrl}" style="max-width:100%;max-height:100vh;object-fit:contain"></body>`);
+      win.document.close();
+    }
+  }catch(e){
+    alert("Could not open the saved photo.");
+  }
+}
+
+function makeRow(x, idx, includeType=false){
+  if(includeType){
     return `<tr>
       <td>${escapeHtml(x.type)}</td>
       <td><strong>${escapeHtml(x.serial)}</strong></td>
       <td>${escapeHtml(x.id || x.part || "")}</td>
       <td>${escapeHtml(x.status || "")}</td>
       <td>${escapeHtml(x.location || "")}</td>
-      <td><button class="secondary" style="padding:7px 9px" onclick="removeItem(${i})">✕</button></td>
+      <td>${x.photoKey ? `<button class="secondary" style="padding:7px 9px" onclick="viewPhoto('${escapeHtml(x.photoKey)}')">View</button>` : "—"}</td>
+      <td><button class="secondary" style="padding:7px 9px" onclick="removeItem(${idx})">✕</button></td>
     </tr>`;
-  }).join("");
+  }
+  return `<tr>
+    <td><strong>${escapeHtml(x.serial)}</strong></td>
+    <td>${escapeHtml(x.id || x.part || "")}</td>
+    <td>${escapeHtml(x.status || "")}</td>
+    <td>${escapeHtml(x.location || "")}</td>
+    <td>${escapeHtml(x.model || "")}</td>
+    <td>${x.photoKey ? `<button class="secondary" style="padding:7px 9px" onclick="viewPhoto('${escapeHtml(x.photoKey)}')">View</button>` : "—"}</td>
+    <td><button class="secondary" style="padding:7px 9px" onclick="removeItem(${idx})">✕</button></td>
+  </tr>`;
 }
-function removeItem(i){
-  const a=getItems(); a.splice(i,1); setItems(a);
+
+function renderSection(items, tbodyId, countId, includeType=false){
+  const body = $(tbodyId);
+  $(countId).textContent = `${items.length} ${items.length===1 ? "item" : "items"}`;
+  if(!items.length){
+    const cols = 7;
+    body.innerHTML = `<tr><td colspan="${cols}" class="item-empty">No items yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = items.map(obj => makeRow(obj.item, obj.index, includeType)).join("");
+}
+
+function render(){
+  const items = getItems();
+  $("countAll").textContent = `Total: ${items.length}`;
+  $("countControl").textContent = `Pack Controls: ${items.filter(x=>x.type==="Pack Control").length}`;
+  $("countSpa").textContent = `Spa Packs: ${items.filter(x=>x.type==="Spa Pack").length}`;
+  $("countHeat").textContent = `Heaters: ${items.filter(x=>x.type==="Heater").length}`;
+
+  const q = normalizedSearch();
+  const indexed = items.map((item,index)=>({item,index}))
+    .filter(x=>itemMatchesSearch(x.item,q))
+    .slice().reverse();
+  const heaters = indexed.filter(x=>x.item.type==="Heater");
+  const controls = indexed.filter(x=>x.item.type==="Pack Control");
+  const spas = indexed.filter(x=>x.item.type==="Spa Pack");
+  const others = indexed.filter(x=>!["Heater","Pack Control","Spa Pack"].includes(x.item.type));
+
+  renderSection(heaters, "heaterRows", "heaterCount", false);
+  renderSection(controls, "controlRows", "controlCount", false);
+  renderSection(spas, "spaRows", "spaCount", false);
+  renderSection(others, "otherRows", "otherCount", true);
+}
+
+async function removeItem(i){
+  const a = getItems();
+  const removed=a[i];
+  a.splice(i,1);
+  setItems(a);
+  if(removed && removed.photoKey){
+    try{ await deletePhotoFromDB(removed.photoKey); }catch(e){}
+  }
 }
 
 $("csvBtn").onclick=()=>{
-  const a=getItems(); if(!a.length) return;
-  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date","Status","Location","Source","Barcode","Notes","Saved At"];
-  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date,x.status,x.location,x.source,x.barcode,x.notes,x.savedAt]);
+  const a = getItems();
+  if(!a.length) return;
+  const headers=["Type","Brand","Serial Number","ID","Part #","Model","Rating","Date","Status","Location","Source","Barcode","Photo Saved","Notes","Saved At"];
+  const rows=a.map(x=>[x.type,x.brand,x.serial,x.id,x.part,x.model,x.rating,x.date,x.status,x.location,x.source,x.barcode,x.photoKey?"Yes":"No",x.notes,x.savedAt]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
   link.href=url; link.download="gecko_inventory.csv"; link.click();
   URL.revokeObjectURL(url);
-};
-
-$("wipeBtn").onclick=()=>{
-  if(confirm("Delete the entire inventory saved on this device?")) setItems([]);
 };
 
 render();
